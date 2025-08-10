@@ -39,6 +39,16 @@ jobs:
           python -m pip install -e .
           python -m pip install pre-commit pytest
 
+      - name: Clean stale packaging artifacts 2nd
+        run: |
+          echo "Existing egg-info dirs (if any):"
+          find . -type d -name "*.egg-info" -print || true
+          # Remove packaging artifacts that can confuse setuptools editable install
+          find . -type d -name "*.egg-info" -prune -exec rm -rf {} +
+          rm -rf .eggs build dist
+          # Ensure a pristine working tree (keep local virtualenvs if present)
+          git clean -xfd -e .venv || true
+
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
         with:
