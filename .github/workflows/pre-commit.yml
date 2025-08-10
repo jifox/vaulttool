@@ -33,3 +33,42 @@ jobs:
         uses: pre-commit/action@v3.0.1
         with:
           extra_args: --all-files
+
+import os
+from pathlib import Path
+import subprocess
+from .crypto import encrypt_file
+from .utils import compute_checksum, encode_base64
+
+# Read once from environment; used to avoid modifying .gitignore in pre-commit/CI contexts
+VAULTTOOL_PRECOMMIT = bool(os.environ.get("VAULTTOOL_PRECOMMIT"))
+
+def encrypt_files(config, force: bool = False):
+    """
+    Encrypts files matching patterns in the specified directories according to the configuration.
+
+    - Encrypts files using OpenSSL and writes a .vault file containing the checksum and base64-encoded data.
+    - Only re-encrypts if the source file's checksum changes.
+    - Automatically adds the source files to the project's .gitignore to prevent accidental commits.
+    - Uses include/exclude directories and patterns from the config.
+    """
+    include_dirs = config.get("include_directories", ["."])
+    exclude_dirs = set(config.get("exclude_directories", []))
+    include_patterns = config.get("include_patterns", [])
+    exclude_patterns = set(config.get("exclude_patterns", []))
+    suffix = config["options"].get("suffix", ".vault")
+    key_file = config["options"].get("key_file")
+    algorithm = config["options"].get("algorithm", "aes-256-cbc")
+    openssl_path = config["options"].get("openssl_path", "openssl")
+
+    # In pre-commit pytest runs, avoid touching repo .gitignore to prevent hook failures
+    disable_gitignore = VAULTTOOL_PRECOMMIT and (Path(".git").exists())
+    gitignore_lines = set()
+    if not disable_gitignore:
+        gitignore_path = Path(".gitignore")
+        # Ensure .gitignore exists
+        if not gitignore_path.exists():
+            gitignore_path.touch()
+        # Read existing .gitignore entries
+        with open(gitignore_path, "r") as gi:
+            gitignore_lines = set(line.strip() for line in gi if line.strip())

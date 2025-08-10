@@ -4,6 +4,10 @@ import subprocess
 from .crypto import encrypt_file
 from .utils import compute_checksum, encode_base64
 
+# Flag to indicate running under pre-commit/CI to avoid touching .gitignore
+VAULTTOOL_PRECOMMIT: bool = bool(os.environ.get("VAULTTOOL_PRECOMMIT"))
+
+
 def decrypt_missing_sources(config, force: bool = False):
     """
     For each .vault file found in the configured directories, if the corresponding source file does not exist,
@@ -54,8 +58,8 @@ def encrypt_files(config, force: bool = False):
     algorithm = config["options"].get("algorithm", "aes-256-cbc")
     openssl_path = config["options"].get("openssl_path", "openssl")
 
-    # In pre-commit pytest runs, avoid touching repo .gitignore to prevent hook failures
-    disable_gitignore = bool(os.environ.get("VAULTTOOL_PRECOMMIT")) and (Path(".git").exists())
+    # In pre-commit/CI runs, avoid touching repo .gitignore to prevent hook failures
+    disable_gitignore = VAULTTOOL_PRECOMMIT and (Path(".git").exists())
     gitignore_lines = set()
     if not disable_gitignore:
         gitignore_path = Path(".gitignore")
