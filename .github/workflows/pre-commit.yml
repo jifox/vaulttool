@@ -25,8 +25,13 @@ jobs:
 
       - name: Clean stale packaging artifacts
         run: |
-          find . -maxdepth 3 -type d -name "*.egg-info" -exec rm -rf {} +
+          echo "Existing egg-info dirs (if any):"
+          find . -type d -name "*.egg-info" -print || true
+          # Remove packaging artifacts that can confuse setuptools editable install
+          find . -type d -name "*.egg-info" -prune -exec rm -rf {} +
           rm -rf .eggs build dist
+          # Ensure a pristine working tree (keep local virtualenvs if present)
+          git clean -xfd -e .venv || true
 
       - name: Install dependencies
         run: |
