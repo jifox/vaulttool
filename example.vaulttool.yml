@@ -1,0 +1,34 @@
+---
+# example.vaulttool.yml
+
+# This is a sample configuration file for VaultTool.
+# Adjust the settings according to your project needs.
+
+# The VaultTool configuration file is searched in the following locations:
+#  1.  ./.vaulttool.yml
+#  2.  ~/.vaulttool/vaulttool.yml
+#  3.  /etc/vaulttool/vaulttool.yml
+
+# It uses the first found configuration file.
+
+vaulttool:
+  include_directories: []  # Directories to include for vaulting. Defaults to current directory.
+  exclude_directories: []  # Directories to exclude from vaulting.
+  
+  include_patterns:  # File patterns to include for vaulting
+    - "*.env"
+    - "*.ini"
+    - "*.json"
+  
+  exclude_patterns:  # File patterns to exclude from vaulting
+    - "*.log"
+    - "*example*"
+    - "*.vault"
+    
+  vault_options:
+    suffix: ".vault"  # Suffix for vault files
+    
+    algorithm: "aes-256-cbc"  # Encryption algorithm to use for vaulting (Openssl compatible)
+    key_type: "file"          # 'file' or 'ask' for being prompted for a key
+    key_file: "~/.vaulttool/aes-gcm.key"  # Path to the key file, if using key_type as file
+    openssl_path: "openssl"  # Optional: define the path to OpenSSL binary if not in PATH

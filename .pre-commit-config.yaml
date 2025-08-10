@@ -1,0 +1,26 @@
+repos:
+  - repo: local
+    hooks:
+      - id: vaulttool-encrypt
+        name: VaultTool Encrypt
+        entry: python3 -m vaulttool encrypt
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: vaulttool-check-ignore
+        name: VaultTool Check Ignore
+        entry: python3 -m vaulttool check-ignore
+        language: system
+        pass_filenames: false
+      - id: pytest
+        name: Pytest
+        entry: bash -lc "VAULTTOOL_PRECOMMIT=1 python3 -B -m pytest -q -o cache_dir=.git/.pytest_cache"
+        language: system
+        pass_filenames: false
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.5
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types: [python]

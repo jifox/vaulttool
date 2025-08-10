@@ -1,0 +1,23 @@
+---
+# Local VaultTool configuration
+
+vaulttool:
+  include_directories: []
+  exclude_directories: []
+
+  include_patterns:
+    - "*.env"
+    - "*.ini"
+    - "*.json"
+
+  exclude_patterns:
+    - "*.log"
+    - "*example*"
+    - "*.vault"
+
+  options:
+    suffix: ".vault"
+    algorithm: "aes-256-cbc"
+    key_type: "file"
+    key_file: "/home/josef/.vaulttool/vault.key"
+    openssl_path: "openssl"

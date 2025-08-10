@@ -1,0 +1,112 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+.venv/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# mypy
+.mypy_cache/
+.dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# VS Code
+.vscode/
+
+# VaultTool
+*.vault
+../../../../tmp/tmp174fkig7/secret.env
+../../../../tmp/tmp2eobctiz/secret.env
+../../../../tmp/tmpjmddwps3/secret.env
+../../../../tmp/tmprnrmxh4o/secret.env
+../../../../tmp/tmp9uv0nkc2/secret.env
+../../../../tmp/tmpq5zs2sos/secret.env
+../../../../tmp/tmplw3z9477/secret.env
+../../../../tmp/tmpixqmol16/secret.env
+../../../../tmp/tmppeavgele/keyfile
+../../../../tmp/tmppeavgele/secret.env
+../../../../tmp/tmp_77sb5xl/keyfile
+../../../../tmp/tmp_77sb5xl/secret.env
+../../.vaulttool/vault.key
+../../../../tmp/tmphbq5fitn/keyfile
+../../../../tmp/tmphbq5fitn/secret.env
+../../../../tmp/tmpj58ili0v/keyfile
+../../../../tmp/tmpj58ili0v/secret.env
+../../../../tmp/tmpdjxjk35y/keyfile
+../../../../tmp/tmpdjxjk35y/secret.env
+../../../../tmp/tmp4zh5w9x1/keyfile
+../../../../tmp/tmp4zh5w9x1/secret.env
+../../../../tmp/tmpai4fr8m4/keyfile
+../../../../tmp/tmpai4fr8m4/secret.env
+../../../../tmp/tmp9glkkerm/keyfile
+../../../../tmp/tmp9glkkerm/secret.env
+../../../../tmp/tmpk_3n0cre/keyfile
+../../../../tmp/tmpk_3n0cre/secret.env
+../../../../tmp/tmp599v4dvk/keyfile
+../../../../tmp/tmp599v4dvk/secret.env
+../../../../tmp/tmp4lf9gt9z/keyfile
+../../../../tmp/tmp4lf9gt9z/secret.env
+../../../../tmp/tmpcxoyhahs/keyfile
+../../../../tmp/tmpcxoyhahs/secret.env
+../../../../tmp/tmp1awnkewi/keyfile
+../../../../tmp/tmp1awnkewi/secret.env
+../../../../tmp/tmp7fy4s41o/keyfile
+../../../../tmp/tmp7fy4s41o/secret.env
+../../../../tmp/tmpf2yzhgvp/keyfile
+../../../../tmp/tmpf2yzhgvp/secret.env
+../../../../tmp/tmp5e982g4_/keyfile
+../../../../tmp/tmp5e982g4_/secret.env
+../../../../tmp/tmpd7r4xz00/keyfile
+../../../../tmp/tmpd7r4xz00/secret.env
+../../../../tmp/tmpls5fx1kz/keyfile
+../../../../tmp/tmpls5fx1kz/secret.env
+../../../../tmp/tmp9ypq3d6m/keyfile
+../../../../tmp/tmp9ypq3d6m/secret.env
+../../../../tmp/tmprw4chcq4/keyfile
+../../../../tmp/tmprw4chcq4/secret.env
+../../../../tmp/tmpa84bfn4m/keyfile
+../../../../tmp/tmpa84bfn4m/secret.env
+../../../../tmp/tmpdd55t801/keyfile
+../../../../tmp/tmpdd55t801/secret.env
+../../../../tmp/tmp375m7xk7/keyfile
+../../../../tmp/tmp375m7xk7/secret.env
+../../../../tmp/tmpejegbixi/keyfile
+../../../../tmp/tmpejegbixi/secret.env
