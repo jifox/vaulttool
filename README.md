@@ -71,28 +71,25 @@ pip install vaulttool
 
 #### Development Installation
 ```bash
-git clone https://github.com/yourusername/vaulttool.git
+git clone https://github.com/jifox/vaulttool.git
 cd vaulttool
 pip install -e .
 
 
 ### 3. Generate Encryption Key
 
-Create a secure encryption key for your vault:
+To create a secure encryption key for your vault run the `./vaulttool-generate-key.sh` script
+or execute the following commands:
 
 ```bash
 # Create vaulttool directory in home
-mkdir -p ~/.vaulttool
+mkdir -p "$HOME/.vaulttool"
 
 # Generate a 256-bit encryption key
-openssl rand -hex 32 > ~/.vaulttool/vault.key
+openssl rand -hex 32 > "$HOME/.vaulttool/vault.key"
 
 # Secure the key file (Unix/Linux/macOS)
-chmod 600 ~/.vaulttool/vault.key
-```
-
-> **⚠️ Security Note:**  
-> Never commit your key file to version control. Store it securely and back it up in a safe location.
+chmod 600 "$HOME/.vaulttool/vault.key"
 
 ## Configuration
 
