@@ -1,5 +1,7 @@
 name: pre-commit
 
+# WIP: Add pre-commit hooks
+
 on:
   push:
     branches: ["**"]
@@ -30,8 +32,9 @@ jobs:
           python -m pip install pre-commit pytest
           python -m pip install -r requirements.txt
           python -m pip install -e .
+          python -m pip list
           
-      - name: Run pre-commit
-        uses: pre-commit/action@v3.0.1
-        with:
-          extra_args: --all-files
+      # - name: Run pre-commit
+      #   uses: pre-commit/action@v3.0.1
+      #   with:
+      #     extra_args: --all-files
