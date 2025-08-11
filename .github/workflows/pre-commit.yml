@@ -7,6 +7,9 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+defaults:
+  run:
+    shell: bash
 
 jobs:
   pre-commit:
@@ -36,7 +39,7 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install -e .
           python -m pip list
-          
+
       # - name: Run pre-commit
       #   uses: pre-commit/action@v3.0.1
       #   with:
