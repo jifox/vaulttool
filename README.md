@@ -1,6 +1,6 @@
 # Vault Tool
 
-<img src="docs/img/vaulttool_icon.png" alt="Vault Tool Icon" width="50%" />
+<img src="docs/img/vaulttool_icon.png" alt="Vault Tool Icon" width="50%" /> 
 
 ![License: Apache-2](https://img.shields.io/badge/License-Apache%202-blue.svg)
 ![Python: 3.10–3.13](https://img.shields.io/badge/python-3.10--3.13-blue.svg)
