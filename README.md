@@ -74,7 +74,8 @@ pip install vaulttool
 git clone https://github.com/jifox/vaulttool.git
 cd vaulttool
 pip install -e .
-
+pre-commit install
+```
 
 ### 3. Generate Encryption Key
 
