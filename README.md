@@ -90,6 +90,7 @@ openssl rand -hex 32 > "$HOME/.vaulttool/vault.key"
 
 # Secure the key file (Unix/Linux/macOS)
 chmod 600 "$HOME/.vaulttool/vault.key"
+```
 
 ## Configuration
 
