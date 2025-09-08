@@ -1,0 +1,4 @@
+# Requirements for pipx installation
+# List CLI tools to be installed via pipx, one per line.
+# Example:
+vaulttool

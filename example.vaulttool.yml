@@ -13,21 +13,26 @@
 
 vaulttool:
   include_directories: []  # Directories to include for vaulting. Defaults to current directory.
-  exclude_directories: []  # Directories to exclude from vaulting.
-  
+
+  # Directories to exclude from vaulting.
+  exclude_directories:
+    - ".venv"
+    - ".git"
+    - "__pycache__"
+
   include_patterns:  # File patterns to include for vaulting
     - "*.env"
     - "*.ini"
     - "*.json"
-  
+
   exclude_patterns:  # File patterns to exclude from vaulting
     - "*.log"
     - "*example*"
     - "*.vault"
-    
+
   vault_options:
     suffix: ".vault"  # Suffix for vault files
-    
+
     algorithm: "aes-256-cbc"  # Encryption algorithm to use for vaulting (Openssl compatible)
     key_type: "file"          # 'file' or 'ask' for being prompted for a key
     key_file: "~/.vaulttool/aes-gcm.key"  # Path to the key file, if using key_type as file

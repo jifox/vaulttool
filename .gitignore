@@ -114,3 +114,5 @@ coverage.xml
 ../../../../tmp/tmp1wcnq4gg/secret.env
 ../../../../tmp/tmpf82tjk6n/keyfile
 ../../../../tmp/tmpf82tjk6n/secret.env
+.venv/lib/python3.12/site-packages/vaulttool-0.1.1.dist-info/direct_url.json
+.venv/lib/python3.12/site-packages/pre_commit/resources/empty_template_package.json

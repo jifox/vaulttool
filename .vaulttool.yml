@@ -2,8 +2,14 @@
 # Local VaultTool configuration
 
 vaulttool:
-  include_directories: []
-  exclude_directories: []
+  include_directories:
+    - "." # Current directory
+
+  # Directories to exclude from vaulting.
+  exclude_directories:
+    - ".venv"
+    - ".git"
+    - "__pycache__"
 
   include_patterns:
     - "*.env"
