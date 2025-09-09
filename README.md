@@ -57,24 +57,27 @@ brew install openssl
 - Download from [OpenSSL for Windows](https://slproweb.com/products/Win32OpenSSL.html)
 - Follow the installation wizard
 
-### 2. Install Vault Tool
 
-#### Using pipx (Recommended)
-```bash
-pipx install vaulttool
-```
+### 2. Install Vault Tool (Recommended: Poetry)
 
-#### Using pip
-```bash
-pip install vaulttool
-```
-
-#### Development Installation
+#### Development/Local Installation
 ```bash
 git clone https://github.com/jifox/vaulttool.git
 cd vaulttool
-pip install -e .
+poetry install
 pre-commit install
+```
+
+#### Running the CLI
+You can run the CLI directly with:
+```bash
+poetry run vaulttool
+```
+
+If you want to install the CLI globally (optional, for advanced users):
+```bash
+poetry build
+pipx install dist/vaulttool-*.whl
 ```
 
 ### 3. Generate Encryption Key
@@ -105,13 +108,17 @@ vaulttool:
     - "src"
     - "configs"
   exclude_directories:
-    - "tests"
+    - ".venv"
+    - ".git"
+    - "__pycache__"
   include_patterns:
     - "*.env"
     - "*.ini"
     - "*.json"
   exclude_patterns:
     - "*.log"
+    - "*example*"
+    - "*.vault"
   options:
     suffix: ".vault"           # Suffix for encrypted files
     openssl_path: "openssl"    # Path to OpenSSL binary
