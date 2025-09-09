@@ -35,7 +35,10 @@ def decrypt_missing_sources(config, force: bool = False):
             with open(tmp_enc, "wb") as df:
                 df.write(encrypted)
             # Decrypt using OpenSSL
-            os.system(f"{openssl_path} enc -d -{algorithm} -in {tmp_enc} -out {source_file} -pass file:{key_file}")
+            os.system(
+                f"{openssl_path} enc -d -{algorithm} -pbkdf2 -in {tmp_enc} "
+                f"-out {source_file} -pass file:{key_file}"
+            )
             os.remove(tmp_enc)
             print(f"Restored source file: {source_file} from vault: {vault_file}")
 

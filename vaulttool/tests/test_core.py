@@ -40,6 +40,10 @@ def test_encrypt_files_creates_vault_file():
         decrypted_path = os.path.join(tmpdir, "decrypted.env")
         with open(decrypted_path, "wb") as df:
             df.write(encrypted)
-        os.system(f"openssl enc -d -aes-256-cbc -in {decrypted_path} -out {decrypted_path}.txt -pass file:{key_path}")
+        # Decrypt and check content inside tempdir context
+        os.system(
+            f"openssl enc -d -aes-256-cbc -pbkdf2 -in {decrypted_path} "
+            f"-out {decrypted_path}.txt -pass file:{key_path}"
+        )
         with open(f"{decrypted_path}.txt") as final:
             assert final.read() == "SECRET=12345"

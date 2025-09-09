@@ -198,6 +198,23 @@ python -m vaulttool.cli refresh --no-force  # only restore missing files
 4. **If a plain file is deleted**, run `vaulttool` to restore it from its `.vault` file
 5. **To discard local plaintext changes and refresh from vaults**, run `vaulttool --force`
 
+
+## Pre-commit Installation
+
+To enable automatic encryption and code checks before every commit, install pre-commit:
+
+```bash
+pip install pre-commit
+```
+
+Then enable it in your repository:
+
+```bash
+pre-commit install
+```
+
+This will ensure all configured hooks (including Vault Tool encryption, ignore checks, tests, and linting) run automatically before each commit.
+
 ## Pre-commit Integration
 
 For automatic encryption before commits, add this to your `.pre-commit-config.yaml`:

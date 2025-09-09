@@ -24,8 +24,11 @@ def test_encrypt_file_creates_encrypted_file():
         # Check that encrypted file exists and is not empty
         assert os.path.exists(encrypted_path)
         assert os.path.getsize(encrypted_path) > 0
-        # Optionally, decrypt and check content
+        # Optionally, decrypt and check content inside tempdir context
         decrypted_path = os.path.join(tmpdir, "decrypted.txt")
-        os.system(f"openssl enc -d -aes-256-cbc -in {encrypted_path} -out {decrypted_path} -pass file:{key_path}")
+        os.system(
+            f"openssl enc -d -aes-256-cbc -pbkdf2 -in {encrypted_path} "
+            f"-out {decrypted_path} -pass file:{key_path}"
+        )
         with open(decrypted_path) as df:
             assert df.read() == "hello world"

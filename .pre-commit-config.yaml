@@ -3,18 +3,18 @@ repos:
     hooks:
       - id: vaulttool-encrypt
         name: VaultTool Encrypt
-        entry: python3 -m vaulttool encrypt
+        entry: poetry run vaulttool encrypt
         language: system
         pass_filenames: false
         always_run: true
       - id: vaulttool-check-ignore
         name: VaultTool Check Ignore
-        entry: python3 -m vaulttool check-ignore
+        entry: poetry run vaulttool check-ignore
         language: system
         pass_filenames: false
       - id: pytest
         name: Pytest
-        entry: bash -lc "VAULTTOOL_PRECOMMIT=1 python3 -B -m pytest -q -o cache_dir=.git/.pytest_cache"
+        entry: bash -lc "VAULTTOOL_PRECOMMIT=1 poetry run python3 -B -m pytest -q -o cache_dir=.git/.pytest_cache"
         language: system
         pass_filenames: false
 
