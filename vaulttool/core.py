@@ -1,3 +1,16 @@
+def remove_vault_files(config):
+    """Delete all vault files matching the configured suffix in the include directories."""
+    suffix = config["options"].get("suffix", ".vault")
+    include_dirs = config.get("include_directories", ["."])
+    removed = []
+    for dir in include_dirs:
+        for vault_file in Path(dir).rglob(f"*{suffix}"):
+            try:
+                vault_file.unlink()
+                removed.append(str(vault_file))
+            except Exception as e:
+                print(f"Failed to remove {vault_file}: {e}")
+    return removed
 import os
 from pathlib import Path
 import subprocess

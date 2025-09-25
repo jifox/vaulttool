@@ -25,5 +25,5 @@ vaulttool:
     suffix: ".vault"
     algorithm: "aes-256-cbc"
     key_type: "file"
-    key_file: "/home/josef/.vaulttool/vault.key"
+    key_file: "/home/ansible/.vaulttool/aes-gcm.key"
     openssl_path: "openssl"

@@ -55,7 +55,19 @@ def load_config(path: str = ".vaulttool.yml") -> Dict[str, Any]:
         raise ValueError(f"Missing required configuration keys: {', '.join(missing)}")
 
     # Basic validation of options block
-    if not isinstance(cfg.get("options"), dict):
+    options = cfg.get("options")
+    if not isinstance(options, dict):
         raise ValueError("'options' must be a mapping/dictionary.")
+
+    # Suffix validation logic
+    suffix = options.get("suffix")
+    if isinstance(suffix, str):
+        if not suffix.startswith("."):
+            if "." in suffix:
+                # If a dot is present, ensure it starts with an underscore
+                if not suffix.startswith("_"):
+                    # Prepend underscore
+                    new_suffix = f"_{suffix}"
+                    options["suffix"] = new_suffix
 
     return cfg

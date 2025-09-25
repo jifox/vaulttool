@@ -153,6 +153,17 @@ This will:
 - ✅ Automatically detect changes in unencrypted files and update corresponding `.vault` files
 - ✅ Add plain text files to `.gitignore` to prevent accidental commits of sensitive information
 - ✅ Restore missing source files from existing `.vault` files
+- ✅ Remove all vault files with `vaulttool remove` (new)
+
+### Remove all vault files
+
+To delete all vault files matching the configured suffix (e.g., `.vault`), run:
+
+```bash
+vaulttool remove
+```
+
+This will search the configured directories and delete all matching vault files.
 
 ### Refresh plaintext from vaults
 
@@ -182,6 +193,9 @@ python -m vaulttool.cli encrypt --force
 # Refresh plaintext from vaults; defaults to overwriting
 python -m vaulttool.cli refresh           # overwrite existing plaintext
 python -m vaulttool.cli refresh --no-force  # only restore missing files
+
+# Remove all vault files matching the configured suffix
+python -m vaulttool.cli remove
 ```
 
 ## Example Workflow

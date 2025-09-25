@@ -1,8 +1,25 @@
+
 import typer
 from .config import load_config
 from .core import encrypt_files, decrypt_missing_sources, check_unencrypted_files_ignored
 
 app = typer.Typer()
+
+
+# ...existing code...
+
+@app.command()
+def remove():
+    """Remove all vault files matching the configured suffix."""
+    config = load_config()
+    from .core import remove_vault_files
+    removed = remove_vault_files(config)
+    if removed:
+        typer.echo("Removed vault files:")
+        for f in removed:
+            typer.echo(f" - {f}")
+    else:
+        typer.echo("No vault files found to remove.")
 
 
 @app.command()

@@ -172,3 +172,5 @@ coverage.xml
 ../../../../tmp/tmpci_aubib/secret.env
 ../../../../tmp/tmpork73iva/keyfile
 ../../../../tmp/tmpork73iva/secret.env
+../../.vaulttool/aes-gcm.key
+.vscode/launch.json
