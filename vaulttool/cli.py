@@ -37,7 +37,7 @@ def refresh(
         help="Overwrite plaintext files from existing .vault files.",
     ),
 ):
-    """Restore/refresh plaintext files from .vault files (defaults to overwrite)."""
+    """Restore/refresh plaintext files from .vault files (defaults to overwrite). Use --no-force to skip existing files."""
     config = load_config()
     decrypt_missing_sources(config, force=force)
 
