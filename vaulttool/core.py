@@ -183,7 +183,7 @@ class VaultTool:
             print(f"Added {rel_path} to .gitignore")
 
     def iter_source_files(self):
-        """Generate all source files matching the configured patterns.
+        """Generator for all source files matching the configured patterns.
         
         Recursively searches the include directories for files matching the
         include patterns, while excluding files matching exclude patterns
@@ -208,7 +208,7 @@ class VaultTool:
                     yield source_file
 
     def iter_vault_files(self):
-        """Generate all vault files matching the configured suffix.
+        """Generator for all vault files matching the configured suffix.
         
         Recursively searches the include directories for files ending with
         the configured vault suffix.
@@ -221,7 +221,7 @@ class VaultTool:
                 yield vault_file
 
     def iter_missing_sources(self):
-        """Generate source files that are missing but have corresponding vault files.
+        """Generator for source files that are missing but have corresponding vault files.
         
         Identifies vault files that exist but whose corresponding source files
         are missing. These are candidates for restoration/decryption.
