@@ -1,3 +1,10 @@
+"""Configuration loading and validation for VaultTool.
+
+This module handles loading VaultTool configuration from YAML files,
+with support for multiple configuration file locations and validation
+of required configuration keys.
+"""
+
 from pathlib import Path
 from typing import Any, Dict
 
@@ -5,16 +12,31 @@ import yaml
 
 
 def load_config(path: str = ".vaulttool.yml") -> Dict[str, Any]:
-    """Load the configuration from the vaulttool config file.
+    """Load and validate the VaultTool configuration file.
 
-    This function attempts to load the configuration from the specified path.
-    If the file does not exist, it will search for a default configuration file
-    - in the user's home directory (`~/.vaulttool/.vaulttool.yml`) or
-    - in a system-wide location. (`/etc/vaulttool/config.yml`).
+    Attempts to load configuration from the specified path. If the file doesn't
+    exist, searches for configuration files in standard locations:
+    
+    1. Current directory: .vaulttool.yml
+    2. User config: ~/.vaulttool/.vaulttool.yml  
+    3. System config: /etc/vaulttool/config.yml
 
+    Args:
+        path: Path to the configuration file. Defaults to ".vaulttool.yml".
+
+    Returns:
+        Dictionary containing the parsed and validated configuration.
+        
     Raises:
-        FileNotFoundError: If the configuration file is not found in any of the expected locations
-        ValueError: If the configuration file is invalid or missing required keys
+        FileNotFoundError: If no configuration file is found in any location.
+        ValueError: If the configuration file is invalid, malformed, or 
+                   missing required keys.
+        yaml.YAMLError: If the YAML file cannot be parsed.
+        
+    Example:
+        >>> config = load_config()
+        >>> print(config['options']['algorithm'])
+        'aes-256-cbc'
     """
     config_path = Path(path)
 
