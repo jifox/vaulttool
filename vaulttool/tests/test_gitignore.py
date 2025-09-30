@@ -37,7 +37,7 @@ vaulttool:
         
         # Create VaultTool instance and encrypt
         vt = VaultTool()
-        vt.encrypt()
+        vt.encrypt_task()
         
         # Check .gitignore exists and contains the source file
         assert gitignore_path.exists()

@@ -34,7 +34,7 @@ vaulttool:
         
         # Create VaultTool instance and encrypt
         vt = VaultTool()
-        vt.encrypt()
+        vt.encrypt_task()
         
         vault_path = plain_path + ".vault"
         assert os.path.exists(vault_path)
@@ -432,7 +432,7 @@ vaulttool:
             cf.write(config_yaml)
         
         vt = VaultTool()
-        vt.remove_vault_files()
+        vt.remove_task()
         
         # Vault files should be removed
         assert not vault1.exists()
@@ -465,7 +465,7 @@ vaulttool:
         
         vt = VaultTool()
         # This should not raise any exceptions
-        vt.validate_gitignore()
+        vt.check_ignore_task()
 
 
 def test_encrypt_with_force_parameter():
@@ -496,7 +496,7 @@ vaulttool:
         vt = VaultTool()
         
         # First encryption
-        vt.encrypt()
+        vt.encrypt_task()
         vault_path = source_path.with_suffix(source_path.suffix + ".vault")
         assert vault_path.exists()
         
@@ -508,11 +508,11 @@ vaulttool:
         time.sleep(0.1)
         
         # Encrypt again without force - should not update (same checksum)
-        vt.encrypt(force=False)
+        vt.encrypt_task(force=False)
         assert vault_path.stat().st_mtime == initial_mtime
         
         # Encrypt with force - should update even with same checksum
-        vt.encrypt(force=True)
+        vt.encrypt_task(force=True)
         assert vault_path.stat().st_mtime > initial_mtime
 
 

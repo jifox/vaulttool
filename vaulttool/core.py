@@ -103,13 +103,13 @@ class VaultTool:
             if not source_file.exists():
                 yield source_file
 
-    def validate_gitignore(self):
+    def check_ignore_task(self):
         """Add check for unignored plaintext files that should be ignored."""
         # Just loop with iter_source_files
         for source_file in self.iter_source_files():
             pass
 
-    def decrypt_missing_sources(self, force: bool = False):
+    def refresh_task(self, force: bool = True):
         """Decrypt and restore missing source files from their vault files.
 
         For each .vault file found in the configured directories, if the corresponding source file does not exist,
@@ -138,7 +138,7 @@ class VaultTool:
             os.remove(temp_path)
             print(f"Decrypted {vault_file} to restore missing source file {source_file}")
 
-    def encrypt(self, force: bool = False):
+    def encrypt_task(self, force: bool = False):
         """Encrypt all source files to their corresponding vault files.
         
         Args:
@@ -164,7 +164,7 @@ class VaultTool:
                 print(f"{action} vault file: {vault_file} for source: {source_file}")
 
 
-    def remove_vault_files(self):
+    def remove_task(self):
         """Delete all vault files matching the configured suffix in the include directories."""
         for vault_file in self.iter_vault_files():
             try:

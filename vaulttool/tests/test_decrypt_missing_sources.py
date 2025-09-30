@@ -32,7 +32,7 @@ vaulttool:
         
         # Create VaultTool instance and encrypt file to create .vault
         vt = VaultTool()
-        vt.encrypt()
+        vt.encrypt_task()
         
         vault_path = plain_path.with_suffix(plain_path.suffix + ".vault")
         assert vault_path.exists()
@@ -40,7 +40,7 @@ vaulttool:
         plain_path.unlink()
         assert not plain_path.exists()
         # Run decrypt_missing_sources
-        vt.decrypt_missing_sources()
+        vt.refresh_task()
         # Source file should be restored
         assert plain_path.exists()
         with open(plain_path) as pf:

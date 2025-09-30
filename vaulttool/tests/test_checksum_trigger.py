@@ -32,17 +32,17 @@ vaulttool:
             pf.write("SECRET=12345")
         
         vt = VaultTool()
-        vt.encrypt()
+        vt.encrypt_task()
         
         vault_path = plain_path + ".vault"
         initial_mtime = os.path.getmtime(vault_path)
         # Run again without changing file, should not update .vault
         time.sleep(1)
-        vt.encrypt()
+        vt.encrypt_task()
         assert os.path.getmtime(vault_path) == initial_mtime
         # Change file content, should update .vault
         time.sleep(1)
         with open(plain_path, "w") as pf:
             pf.write("SECRET=67890")
-        vt.encrypt()
+        vt.encrypt_task()
         assert os.path.getmtime(vault_path) > initial_mtime
