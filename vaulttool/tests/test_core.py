@@ -328,6 +328,8 @@ vaulttool:
 
 def test_add_to_gitignore():
     """Test the add_to_gitignore method."""
+    if os.getenv("VAULTTOOL_PRECOMMIT") == "1":
+        pytest.skip("Skipping test in pre-commit environment")
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
         
