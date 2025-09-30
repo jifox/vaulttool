@@ -100,6 +100,12 @@ chmod 600 "$HOME/.vaulttool/vault.key"
 
 Vault Tool uses a YAML configuration file named `.vaulttool.yml` in your project directory to control which files are encrypted and how.
 
+You can generate an example configuration file with:
+
+```bash
+vaulttool gen-vaulttool > .vaulttool.yml
+```
+
 Example `.vaulttool.yml`:
 
 ```yaml
@@ -142,6 +148,17 @@ Edit `.vaulttool.yml` to match your project structure and security requirements.
 
 ## Usage
 
+### Generate example configuration
+```bash
+vaulttool gen-vaulttool > .vaulttool.yml
+```
+
+### Display version information
+```bash
+vaulttool version
+```
+
+### Default operation (encrypt files)
 To encrypt your sensitive files, navigate to your project directory and run:
 
 ```bash
@@ -149,11 +166,11 @@ vaulttool
 ```
 
 This will:
-- ✅ Encrypt specified files based on the configuration in `.vaulttool.yml`
-- ✅ Automatically detect changes in unencrypted files and update corresponding `.vault` files
-- ✅ Add plain text files to `.gitignore` to prevent accidental commits of sensitive information
-- ✅ Restore missing source files from existing `.vault` files
-- ✅ Remove all vault files with `vaulttool remove` (new)
+- Encrypt specified files based on the configuration in `.vaulttool.yml`
+- Automatically detect changes in unencrypted files and update corresponding `.vault` files
+- Add plain text files to `.gitignore` to prevent accidental commits of sensitive information
+- Restore missing source files from existing `.vault` files
+- Remove all vault files with `vaulttool remove` (new)
 
 ### Remove all vault files
 
@@ -187,6 +204,12 @@ has not changed, ensuring the vaults are regenerated consistently (for example a
 If you prefer explicit commands, the Typer CLI exposes subcommands:
 
 ```bash
+# Generate example configuration file
+python -m vaulttool.cli gen-vaulttool > .vaulttool.yml
+
+# Display version information
+python -m vaulttool.cli version
+
 # Re-encrypt sources; add --force to rewrite existing .vault files
 python -m vaulttool.cli encrypt --force
 
@@ -201,9 +224,10 @@ python -m vaulttool.cli remove
 ## Example Workflow
 
 ### Initial Setup
-1. **Add secrets** to your project (e.g., `configs/secret.env`)
-2. **Configure** `.vaulttool.yml` to match your files
-3. **Run** `vaulttool` to encrypt files
+1. **Generate configuration** with `vaulttool gen-vaulttool > .vaulttool.yml`
+2. **Add secrets** to your project (e.g., `configs/secret.env`)
+3. **Configure** `.vaulttool.yml` to match your files
+4. **Run** `vaulttool` to encrypt files
 
 ### Daily Workflow
 1. **Edit** your secret files as needed
@@ -300,9 +324,10 @@ chmod 600 ~/.vaulttool/vault.key
 
 ### Getting Help
 
-- 📖 **Documentation**: Check this README for setup and usage instructions
-- 🐛 **Bug Reports**: [Open an issue](https://github.com/yourusername/vaulttool/issues) on GitHub
-- 💡 **Feature Requests**: [Start a discussion](https://github.com/yourusername/vaulttool/discussions) on GitHub
+- **Built-in Help**: Run `vaulttool --help` for command reference and usage examples
+- **Documentation**: Check this README for setup and usage instructions
+- **Bug Reports**: [Open an issue](https://github.com/yourusername/vaulttool/issues) on GitHub
+- **Feature Requests**: [Start a discussion](https://github.com/yourusername/vaulttool/discussions) on GitHub
 
 ## License
 
