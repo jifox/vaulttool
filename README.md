@@ -11,6 +11,8 @@ A simple tool that allows you to automatically encrypt your secrets and configur
 
 - [Features](#features)
 - [What's New in Version 2.0.0](#whats-new-in-version-200)
+  - [Cryptographic Components](#cryptographic-components)
+  - [Vault File Format](#vault-file-format)
   - [Simplified Installation](#simplified-installation)
   - [Enhanced Security & Reliability](#enhanced-security--reliability)
   - [Better Error Messages](#better-error-messages)
@@ -40,6 +42,9 @@ A simple tool that allows you to automatically encrypt your secrets and configur
 - [Contributing](#contributing)
   - [How to Contribute](#how-to-contribute)
   - [Development Setup](#development-setup)
+- [Python API Usage](#python-api-usage)
+- [Utility Functions](#utility-functions)
+- [Security Best Practices](#security-best-practices)
 - [Troubleshooting](#troubleshooting)
   - [Common Issues](#common-issues)
   - [Getting Help](#getting-help)
