@@ -14,8 +14,8 @@ def test_encrypt_files_creates_vault_file():
             pf.write("SECRET=12345")
         # Create a key file
         key_path = os.path.join(tmpdir, "keyfile")
-        with open(key_path, "w") as kf:
-            kf.write("mysecretpassword")
+        with open(key_path, "wb") as kf:
+            kf.write(b"mysecretpassword12345678901234")  # 32 bytes for better key material
         # Write config YAML
         config_yaml = f"""
 vaulttool:
@@ -39,23 +39,26 @@ vaulttool:
         vault_path = plain_path + ".vault"
         assert os.path.exists(vault_path)
         assert os.path.getsize(vault_path) > 0
-        # Read only the second line (base64 data) from .vault file
-        import base64
+        
+        # Verify vault file format (HMAC + Base64 encrypted content)
         with open(vault_path, "r") as vf:
             lines = vf.readlines()
             assert len(lines) >= 2
-            encrypted_b64 = lines[1].strip()
-        encrypted = base64.b64decode(encrypted_b64)
-        decrypted_path = os.path.join(tmpdir, "decrypted.env")
-        with open(decrypted_path, "wb") as df:
-            df.write(encrypted)
-        # Decrypt and check content inside tempdir context
-        os.system(
-            f"openssl enc -d -aes-256-cbc -pbkdf2 -in {decrypted_path} "
-            f"-out {decrypted_path}.txt -pass file:{key_path}"
-        )
-        with open(f"{decrypted_path}.txt") as final:
-            assert final.read() == "SECRET=12345"
+            hmac_tag = lines[0].strip()
+            lines[1].strip()
+            
+            # Verify HMAC is 64 hex characters (SHA-256)
+            assert len(hmac_tag) == 64
+            assert all(c in '0123456789abcdef' for c in hmac_tag)
+            
+        # Test decryption using VaultTool's decrypt method
+        os.remove(plain_path)
+        vt.refresh_task()
+        
+        # Verify decrypted content
+        with open(plain_path, "r") as f:
+            assert f.read() == "SECRET=12345"
+
 
 
 def test_source_filename_static_method():
@@ -92,7 +95,7 @@ vaulttool:
   exclude_patterns: []
   options:
     suffix: "vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)
@@ -102,11 +105,16 @@ vaulttool:
 
 
 def test_constructor_suffix_underscore_prefix():
-    """Test constructor adds underscore prefix for non-dot suffixes."""
+    """Test constructor handles suffix correctly."""
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
         
-        config_yaml = """
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
+        
+        config_yaml = f"""
 vaulttool:
   include_directories: ['.']
   exclude_directories: []
@@ -114,14 +122,13 @@ vaulttool:
   exclude_patterns: []
   options:
     suffix: "prod.vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)
         
         vt = VaultTool()
-        # The config processing adds underscore (_prod.vault), 
-        # then VaultTool constructor adds another underscore for non-dot prefixes
+        # The suffix should be stored as provided (with dot)
         assert vt.suffix == "_prod.vault"
 
 
@@ -137,8 +144,8 @@ def test_encrypt_file_method():
         
         with open(source_path, "w") as f:
             f.write("test content")
-        with open(key_path, "w") as f:
-            f.write("testkey")
+        with open(key_path, "wb") as f:
+            f.write(b"testkey-16-bytes")  # 16 bytes minimum
         
         # Create VaultTool with minimal config
         config_yaml = f"""
@@ -176,8 +183,8 @@ def test_decrypt_file_method():
         
         with open(source_path, "w") as f:
             f.write("test content")
-        with open(key_path, "w") as f:
-            f.write("testkey")
+        with open(key_path, "wb") as f:
+            f.write(b"testkey-16-bytes")  # 16 bytes minimum
         
         # Create VaultTool with minimal config
         config_yaml = f"""
@@ -211,6 +218,11 @@ def test_iter_source_files():
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
         
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
+        
         # Create test files
         env_file = Path(tmpdir) / "config.env"
         txt_file = Path(tmpdir) / "readme.txt"
@@ -232,7 +244,7 @@ vaulttool:
   exclude_patterns: ['*.log']
   options:
     suffix: ".vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)
@@ -253,6 +265,11 @@ def test_iter_vault_files():
     """Test the iter_vault_files generator."""
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
+        
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
         
         # Create test vault files
         vault1 = Path(tmpdir) / "config.env.vault"
@@ -275,7 +292,7 @@ vaulttool:
   exclude_patterns: []
   options:
     suffix: ".vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)
@@ -296,6 +313,11 @@ def test_iter_missing_sources():
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
         
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
+        
         # Create vault files with and without corresponding source files
         vault1 = Path(tmpdir) / "config.env.vault"
         vault2 = Path(tmpdir) / "secrets.txt.vault"
@@ -314,7 +336,7 @@ vaulttool:
   exclude_patterns: []
   options:
     suffix: ".vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)
@@ -333,6 +355,11 @@ def test_add_to_gitignore():
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
         
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
+        
         # Initialize git repo
         os.system("git init")
         
@@ -344,7 +371,7 @@ vaulttool:
   exclude_patterns: []
   options:
     suffix: ".vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)
@@ -374,6 +401,11 @@ def test_add_to_gitignore_precommit_env():
     """Test add_to_gitignore respects VAULTTOOL_PRECOMMIT environment variable."""
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
+
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
         
         # Initialize git repo
         os.system("git init")
@@ -386,7 +418,7 @@ vaulttool:
   exclude_patterns: []
   options:
     suffix: ".vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)
@@ -410,6 +442,11 @@ def test_remove_vault_files():
     """Test the remove_vault_files method."""
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
+
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
         
         # Create test vault files
         vault1 = Path(tmpdir) / "config.env.vault"
@@ -428,7 +465,7 @@ vaulttool:
   exclude_patterns: []
   options:
     suffix: ".vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)
@@ -447,6 +484,11 @@ def test_validate_gitignore():
     """Test the validate_gitignore method."""
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
+
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
         
         # Create test files
         env_file = Path(tmpdir) / "config.env"
@@ -460,7 +502,7 @@ vaulttool:
   exclude_patterns: []
   options:
     suffix: ".vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)
@@ -480,7 +522,7 @@ def test_encrypt_with_force_parameter():
         key_path = Path(tmpdir) / "keyfile"
         
         source_path.write_text("SECRET=12345")
-        key_path.write_text("testkey")
+        key_path.write_bytes(b"testkey-16-bytes")  # 16 bytes minimum
         
         config_yaml = f"""
 vaulttool:
@@ -522,6 +564,16 @@ def test_exclude_directories():
     """Test that exclude_directories works correctly."""
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
+
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
+
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
         
         # Create directory structure
         included_dir = Path(tmpdir) / "included"
@@ -542,7 +594,7 @@ vaulttool:
   exclude_patterns: []
   options:
     suffix: ".vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)
@@ -559,6 +611,11 @@ def test_exclude_patterns():
     """Test that exclude_patterns works correctly."""
     with tempfile.TemporaryDirectory() as tmpdir:
         os.chdir(tmpdir)
+        
+        # Create a key file
+        key_path = os.path.join(tmpdir, "keyfile")
+        with open(key_path, "wb") as kf:
+            kf.write(b"test_key_12345678901234567890")
         
         # Create test files
         env_file = Path(tmpdir) / "config.env"
@@ -577,7 +634,7 @@ vaulttool:
   exclude_patterns: ['*.log', '*.txt', '*.yml']
   options:
     suffix: ".vault"
-    key_file: "keyfile"
+    key_file: "{key_path}"
 """
         with open(".vaulttool.yml", "w") as cf:
             cf.write(config_yaml)

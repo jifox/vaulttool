@@ -2,3 +2,4 @@ pyyaml
 typer
 pytest
 ruff
+cryptography

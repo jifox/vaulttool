@@ -76,10 +76,32 @@ def load_config(path: str = ".vaulttool.yml") -> Dict[str, Any]:
     if missing:
         raise ValueError(f"Missing required configuration keys: {', '.join(missing)}")
 
+    # Validate types of required keys
+    if not isinstance(cfg.get("include_directories"), list):
+        raise ValueError("'include_directories' must be a list")
+    if not isinstance(cfg.get("exclude_directories"), list):
+        raise ValueError("'exclude_directories' must be a list")
+    if not isinstance(cfg.get("include_patterns"), list):
+        raise ValueError("'include_patterns' must be a list")
+    if not isinstance(cfg.get("exclude_patterns"), list):
+        raise ValueError("'exclude_patterns' must be a list")
+
+    # Validate include_patterns is not empty
+    if not cfg.get("include_patterns"):
+        raise ValueError("'include_patterns' cannot be empty - at least one pattern required")
+
     # Basic validation of options block
     options = cfg.get("options")
     if not isinstance(options, dict):
         raise ValueError("'options' must be a mapping/dictionary.")
+    
+    # Validate key_file is specified
+    if "key_file" not in options:
+        raise ValueError("'options.key_file' is required")
+    if not isinstance(options.get("key_file"), str):
+        raise ValueError("'options.key_file' must be a string")
+    if not options.get("key_file"):
+        raise ValueError("'options.key_file' cannot be empty")
 
     # Suffix validation logic
     suffix = options.get("suffix")
