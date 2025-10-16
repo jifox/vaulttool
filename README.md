@@ -8,7 +8,7 @@
 [![codecov](https://codecov.io/gh/jifox/vaulttool/branch/main/graph/badge.svg)](https://codecov.io/gh/jifox/vaulttool)
 
 A simple tool that allows you to automatically encrypt your secrets and configuration files so that they can be safely stored in your version control system.
-
+environments
 ## TL;DR
 
 ```bash
@@ -66,6 +66,7 @@ vaulttool refresh
 - [Usage](#usage)
   - [Generate example configuration](#generate-example-configuration)
   - [Display version information](#display-version-information)
+  - [Generate or rotate encryption key](#generate-or-rotate-encryption-key)
   - [Encrypt Files](#encrypt-files)
   - [Remove all vault files](#remove-all-vault-files)
   - [Refresh plaintext from vaults](#refresh-plaintext-from-vaults)
@@ -79,6 +80,7 @@ vaulttool refresh
 - [Contributing](#contributing)
   - [How to Contribute](#how-to-contribute)
   - [Development Setup](#development-setup)
+  - [Releasing to PyPI](#releasing-to-pypi)
 - [Python API Usage](#python-api-usage)
 - [Utility Functions](#utility-functions)
 - [Security Best Practices](#security-best-practices)
@@ -368,15 +370,52 @@ pipx install dist/vaulttool-*.whl --force
 
 ### Generate Encryption Key
 
-To create a secure encryption key for your vault, you can use the provided script or generate one manually:
+To create a secure encryption key for your vault, you can use the built-in command or generate one manually:
 
-**Option 1: Using the provided script:**
+**Option 1: Using VaultTool CLI (Recommended):**
+
+```bash
+# Generate new key (reads path from .vaulttool.yml)
+vaulttool generate-key
+
+# Generate key in custom location
+vaulttool generate-key --key-file ~/.vaulttool/vault.key
+
+# Replace existing key with backup
+vaulttool generate-key --force
+
+# Replace key AND re-encrypt all vault files
+vaulttool generate-key --rekey --force
+```
+
+The `generate-key` command provides:
+- Automatic key generation with proper entropy (64 hex chars = 32 bytes)
+- Automatic backup of existing keys with timestamp
+- Optional rekey functionality to re-encrypt all vaults with new key
+- Proper file permissions (600 - owner read/write only)
+- Interactive prompts for safety (unless `--force` is used)
+
+**Rekey Process:**
+
+When using `--rekey`, the command performs these steps automatically:
+1. Restores all plaintext files from existing vaults
+2. Removes all old vault files
+3. Backs up the old key with timestamp
+4. Writes the new key
+5. Re-encrypts all files with the new key
+
+This is useful when:
+- You need to rotate encryption keys for security
+- A key may have been compromised
+- Migrating to a new key management system
+
+**Option 2: Using the provided script:**
 
 ```bash
 ./vaulttool-generate-key.sh
 ```
 
-**Option 2: Manual generation using Python:**
+**Option 3: Manual generation using Python:**
 
 ```bash
 # Create vaulttool directory in home
@@ -389,7 +428,7 @@ python3 -c "import secrets; print(secrets.token_hex(32))" > "$HOME/.vaulttool/va
 chmod 600 "$HOME/.vaulttool/vault.key"
 ```
 
-**Option 3: Manual generation using OpenSSL (if available):**
+**Option 4: Manual generation using OpenSSL (if available):**
 
 ```bash
 mkdir -p "$HOME/.vaulttool"
@@ -572,6 +611,46 @@ vaulttool gen-vaulttool > .vaulttool.yml
 vaulttool version
 ```
 
+### Generate or rotate encryption key
+
+Generate a new encryption key or rotate an existing one:
+
+```bash
+vaulttool generate-key [OPTIONS]
+
+  OPTIONS:
+    --key-file  -k       Path to key file (default: from .vaulttool.yml config)
+    --rekey              Re-encrypt all vault files with the new key
+    --force              Skip confirmation prompts (use with caution)
+    --verbose  -v        Enable verbose debug logging
+    --quiet    -q        Show only errors (suppress info/warning)
+    --help               Show this message and exit.
+```
+
+Examples:
+
+```bash
+# Generate new key using path from config
+vaulttool generate-key
+
+# Generate key in specific location
+vaulttool generate-key --key-file ~/.vaulttool/vault.key
+
+# Replace existing key (with backup)
+vaulttool generate-key --force
+
+# Rotate key and re-encrypt all vaults
+vaulttool generate-key --rekey --force
+```
+
+The command will:
+- Create a new key if none exists
+- Backup existing key with timestamp before replacing
+- Optionally re-encrypt all vault files with new key (`--rekey`)
+- Set proper file permissions (600)
+
+**Important:** Always test decryption after rekeying before deleting backup keys!
+
 ### Encrypt Files
 
 To encrypt your sensitive files, navigate to your project directory and run:
@@ -726,6 +805,84 @@ cd vaulttool
 pip install -e .[dev]
 pre-commit install
 ```
+
+### Releasing to PyPI
+
+VaultTool uses automated GitHub Actions to publish releases to PyPI. Here's the quick guide:
+
+#### 1. Setup GitHub Secret (One-Time)
+
+**Choose one approach:**
+
+**Option A: Repository Secret** (Simple, automatic releases)
+1. Get PyPI token: https://pypi.org/manage/account/token/
+2. Go to: https://github.com/jifox/vaulttool/settings/secrets/actions
+3. Add secret: Name = `PYPI_TOKEN`, Value = your token
+
+**Option B: Environment Secret** (More secure, requires approval)
+1. Get PyPI token: https://pypi.org/manage/account/token/
+2. Go to: https://github.com/jifox/vaulttool/settings/environments
+3. Create environment: `pypi-production` with protection rules
+4. Add secret to environment: Name = `PYPI_TOKEN`
+5. Uncomment `environment: pypi-production` in `.github/workflows/release.yml`
+
+#### 2. Release Process
+
+```bash
+# Update version
+poetry version 2.0.1
+
+# Update CHANGELOG.md with release notes
+
+# Commit changes
+git add pyproject.toml CHANGELOG.md
+git commit -m "chore: prepare release v2.0.1"
+git push origin main
+
+# Create and push tag (triggers automated release)
+git tag v2.0.1
+git push origin v2.0.1
+```
+
+#### 3. Automated Steps
+
+When you push a `v*` tag, GitHub Actions automatically:
+
+1. ✅ Validates version matches tag
+2. ✅ Runs all tests
+3. ✅ Builds wheel and source distribution
+4. ✅ Publishes to PyPI
+5. ✅ Creates GitHub release with artifacts
+
+#### 4. Quick Commands
+
+```bash
+# Patch release (2.0.0 → 2.0.1)
+poetry version patch && git add pyproject.toml CHANGELOG.md && \
+git commit -m "chore: release v$(poetry version -s)" && \
+git tag v$(poetry version -s) && \
+git push origin main && git push origin v$(poetry version -s)
+
+# Minor release (2.0.0 → 2.1.0)
+poetry version minor && git add pyproject.toml CHANGELOG.md && \
+git commit -m "chore: release v$(poetry version -s)" && \
+git tag v$(poetry version -s) && \
+git push origin main && git push origin v$(poetry version -s)
+
+# Pre-release (beta/RC)
+poetry version 2.1.0-beta.1 && git add pyproject.toml CHANGELOG.md && \
+git commit -m "chore: release v$(poetry version -s)" && \
+git tag v$(poetry version -s) && \
+git push origin main && git push origin v$(poetry version -s)
+```
+
+#### 5. Monitor Release
+
+- **Workflow**: https://github.com/jifox/vaulttool/actions/workflows/release.yml
+- **Releases**: https://github.com/jifox/vaulttool/releases
+- **PyPI**: https://pypi.org/project/vaulttool/
+
+For detailed documentation, see [docs/PYPI_RELEASE_WORKFLOW.md](docs/PYPI_RELEASE_WORKFLOW.md)
 
 ## Python API Usage
 

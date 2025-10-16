@@ -5,7 +5,123 @@ All notable changes to VaultTool will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2025-10-15
+## [2.0.1] - 2025-10-16
+
+### Added
+
+#### New Command: `generate-key`
+
+A comprehensive CLI command for encryption key management with backup and rotation capabilities.
+
+**Features:**
+
+- **New Key Creation**: Generates cryptographically secure 32-byte keys (64 hex characters)
+  - Automatically creates parent directories if needed
+  - Sets proper file permissions (600 - owner read/write only)
+  - Reads key path from `.vaulttool.yml` or accepts `--key-file` option
+  - Provides warnings about backing up the key securely
+
+- **Key Replacement with Backup**: Safely replaces existing keys
+  - Creates timestamped backups of old keys (format: `vault.key.backup_YYYYMMDD_HHMMSS`)
+  - Interactive confirmation prompts (bypass with `--force`)
+  - Preserves file permissions on both old and new keys
+  - Clear summary of operations performed
+
+- **Automatic Rekey (Key Rotation)**: Complete key rotation with vault re-encryption
+  - 5-step automated process:
+    1. Restores plaintext files from existing vaults
+    2. Removes old vault files
+    3. Backs up the old key with timestamp
+    4. Writes the new key
+    5. Re-encrypts all files with the new key
+  - Graceful error handling with rollback information
+  - Progress indicators for each step
+  - Comprehensive summary of operations
+
+**Command Syntax:**
+
+```bash
+vaulttool generate-key [OPTIONS]
+
+Options:
+  --key-file  -k    Path to key file (default: from .vaulttool.yml config)
+  --rekey           Re-encrypt all vault files with the new key
+  --force           Skip confirmation prompts (use with caution)
+  --verbose  -v     Enable verbose debug logging
+  --quiet    -q     Show only errors (suppress info/warning)
+```
+
+**Use Cases:**
+
+- Initial key generation for new projects
+- Periodic key rotation (security best practice)
+- Emergency key replacement after suspected compromise
+- Migration to new encryption keys
+- Team key management and rotation
+
+**Safety Features:**
+
+- Interactive confirmations before destructive operations
+- Automatic timestamped backups of old keys
+- Proper file permissions (600) enforced
+- Comprehensive error handling with recovery instructions
+- Step-by-step progress reporting
+- Verification prompts for safety
+
+**Examples:**
+
+```bash
+# Generate new key using path from config
+vaulttool generate-key
+
+# Generate key in specific location
+vaulttool generate-key --key-file ~/.vaulttool/vault.key
+
+# Replace existing key with backup
+vaulttool generate-key --force
+
+# Rotate key and re-encrypt all vaults (complete key rotation)
+vaulttool generate-key --rekey --force
+```
+
+### Changed
+
+- **CLI Help**: Updated main application help text to include `generate-key` command
+- **README Documentation**: Enhanced with comprehensive `generate-key` documentation
+  - Added "Generate or rotate encryption key" section in Usage
+  - Enhanced "Generate Encryption Key" section in Installation
+  - Added rekey process explanation
+  - Updated Table of Contents
+
+### Documentation
+
+- **docs/GENERATE_KEY_FEATURE.md**: Created comprehensive feature documentation including:
+  - Command syntax and all options
+  - Detailed feature descriptions
+  - Use cases and examples
+  - Safety features and best practices
+  - Implementation details
+  - Security considerations
+  - Error messages and solutions
+  - Process flow diagrams
+  - Testing information
+
+### Technical Details
+
+- Uses `secrets.token_hex(32)` for cryptographically secure random key generation
+- Integrates with existing configuration system
+- Maintains compatibility with all existing VaultTool operations
+- Full error handling with try/except blocks for typer.Abort
+- Proper file permission handling (600 on all key files)
+- Atomic operations with clear rollback information on failure
+
+### Contributors
+
+- Josef Fuchs - Lead Developer
+
+---
+
+## [2.0.0] - 2025-10-16
 
 ### Major Release - Quality & Reliability Improvements
 
