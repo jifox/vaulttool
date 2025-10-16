@@ -87,11 +87,52 @@ vaulttool generate-key --rekey --force
 ### Changed
 
 - **CLI Help**: Updated main application help text to include `generate-key` command
+  - Improved help text formatting across all CLI commands using Click's `\b` directive
+  - Better preserved line breaks and indentation in terminal output
+  - Enhanced readability for all commands: `generate-key`, `version`, `gen-vaulttool`, `remove`, `encrypt`, `refresh`, `check-ignore`
 - **README Documentation**: Enhanced with comprehensive `generate-key` documentation
   - Added "Generate or rotate encryption key" section in Usage
   - Enhanced "Generate Encryption Key" section in Installation
   - Added rekey process explanation
   - Updated Table of Contents
+
+#### GitHub Issue Templates
+
+Added structured issue templates to improve issue reporting consistency and quality:
+
+- **Bug Report Template** (`bug_report.yml`):
+  - Comprehensive form with environment capture (VaultTool version, Python version, OS)
+  - Structured sections: description, steps to reproduce, expected/actual behavior
+  - Error output section with syntax highlighting
+  - Configuration file section for `.vaulttool.yml`
+  - Pre-submission checklist to reduce duplicates
+  - Auto-labels as `bug`
+
+- **Feature Request Template** (`feature_request.yml`):
+  - Problem statement and proposed solution sections
+  - Alternatives considered and use cases
+  - Example usage with code formatting
+  - Priority selection (Low/Medium/High)
+  - Contribution willingness indicators
+  - Auto-labels as `enhancement`
+
+- **General Issue Template** (`general_issue.yml`):
+  - Flexible form for questions, documentation issues, and discussions
+  - Issue type selection dropdown
+  - Optional environment fields
+  - Documentation reference tracking
+  - Auto-labels as `question`
+
+- **Template Configuration** (`config.yml`):
+  - Disables blank issues to force template selection
+  - Contact links for Documentation, Discussions, and Security reporting
+
+- **Benefits**:
+  - Consistent issue formatting across all reports
+  - Required fields ensure complete information
+  - Automatic labeling for faster triage
+  - Better user experience with guided forms
+  - Faster issue resolution with complete context
 
 ### Documentation
 
@@ -106,6 +147,38 @@ vaulttool generate-key --rekey --force
   - Process flow diagrams
   - Testing information
 
+- **docs/ISSUE_TEMPLATES_IMPLEMENTATION.md**: Complete implementation summary for GitHub issue templates
+  - Template descriptions and features
+  - Before/After comparison
+  - User experience flow
+  - Testing and validation details
+  - Future enhancements
+
+- **docs/PYPI_RELEASE_WORKFLOW.md**: Complete PyPI release automation guide
+  - GitHub Actions workflow configuration
+  - Release process documentation
+  - Security best practices with OIDC trusted publishing
+  - Troubleshooting guide
+
+- **docs/README.md**: Documentation directory index
+
+- **.github/ISSUE_TEMPLATE/README.md**: Template usage and customization guide
+
+### Infrastructure
+
+- **GitHub Actions Workflow** (`.github/workflows/release.yml`):
+  - Automated PyPI publishing on version tags
+  - Version validation against `pyproject.toml`
+  - Poetry-based build process
+  - Secure publishing via OpenID Connect (OIDC) trusted publishing
+  - Build artifact retention
+
+- **VS Code Testing Configuration**:
+  - Created `vaulttool/tests/conftest.py` with `preserve_cwd` fixture
+  - Automatic working directory restoration for all tests
+  - Fixes VS Code Test Explorer integration issues
+  - All 99 tests now pass in both terminal and VS Code
+
 ### Technical Details
 
 - Uses `secrets.token_hex(32)` for cryptographically secure random key generation
@@ -114,6 +187,14 @@ vaulttool generate-key --rekey --force
 - Full error handling with try/except blocks for typer.Abort
 - Proper file permission handling (600 on all key files)
 - Atomic operations with clear rollback information on failure
+- YAML-based issue forms for type-safe inputs and validation
+- VS Code pytest fixture for working directory preservation
+
+### Issues Resolved
+
+- Issue #10: Add GitHub Issue Templates for Bugs, Features, and General Reports
+- Issue #6: Python tests in VS Code
+- Issue #5: Fix help text formatting
 
 ### Contributors
 
