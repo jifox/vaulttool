@@ -79,6 +79,7 @@ vaulttool refresh
 - [Contributing](#contributing)
   - [How to Contribute](#how-to-contribute)
   - [Development Setup](#development-setup)
+  - [Releasing to PyPI](#releasing-to-pypi)
 - [Python API Usage](#python-api-usage)
 - [Utility Functions](#utility-functions)
 - [Security Best Practices](#security-best-practices)
@@ -726,6 +727,84 @@ cd vaulttool
 pip install -e .[dev]
 pre-commit install
 ```
+
+### Releasing to PyPI
+
+VaultTool uses automated GitHub Actions to publish releases to PyPI. Here's the quick guide:
+
+#### 1. Setup GitHub Secret (One-Time)
+
+**Choose one approach:**
+
+**Option A: Repository Secret** (Simple, automatic releases)
+1. Get PyPI token: https://pypi.org/manage/account/token/
+2. Go to: https://github.com/jifox/vaulttool/settings/secrets/actions
+3. Add secret: Name = `PYPI_TOKEN`, Value = your token
+
+**Option B: Environment Secret** (More secure, requires approval)
+1. Get PyPI token: https://pypi.org/manage/account/token/
+2. Go to: https://github.com/jifox/vaulttool/settings/environments
+3. Create environment: `pypi-production` with protection rules
+4. Add secret to environment: Name = `PYPI_TOKEN`
+5. Uncomment `environment: pypi-production` in `.github/workflows/release.yml`
+
+#### 2. Release Process
+
+```bash
+# Update version
+poetry version 2.0.1
+
+# Update CHANGELOG.md with release notes
+
+# Commit changes
+git add pyproject.toml CHANGELOG.md
+git commit -m "chore: prepare release v2.0.1"
+git push origin main
+
+# Create and push tag (triggers automated release)
+git tag v2.0.1
+git push origin v2.0.1
+```
+
+#### 3. Automated Steps
+
+When you push a `v*` tag, GitHub Actions automatically:
+
+1. Validates version matches tag
+2. Runs all tests
+3. Builds wheel and source distribution
+4. Publishes to PyPI
+5. Creates GitHub release with artifacts
+
+#### 4. Quick Commands
+
+```bash
+# Patch release (2.0.0 → 2.0.1)
+poetry version patch && git add pyproject.toml CHANGELOG.md && \
+git commit -m "chore: release v$(poetry version -s)" && \
+git tag v$(poetry version -s) && \
+git push origin main && git push origin v$(poetry version -s)
+
+# Minor release (2.0.0 → 2.1.0)
+poetry version minor && git add pyproject.toml CHANGELOG.md && \
+git commit -m "chore: release v$(poetry version -s)" && \
+git tag v$(poetry version -s) && \
+git push origin main && git push origin v$(poetry version -s)
+
+# Pre-release (beta/RC)
+poetry version 2.1.0-beta.1 && git add pyproject.toml CHANGELOG.md && \
+git commit -m "chore: release v$(poetry version -s)" && \
+git tag v$(poetry version -s) && \
+git push origin main && git push origin v$(poetry version -s)
+```
+
+#### 5. Monitor Release
+
+- **Workflow**: https://github.com/jifox/vaulttool/actions/workflows/release.yml
+- **Releases**: https://github.com/jifox/vaulttool/releases
+- **PyPI**: https://pypi.org/project/vaulttool/
+
+For detailed documentation, see [.github/PYPI_RELEASE_WORKFLOW.md](.github/PYPI_RELEASE_WORKFLOW.md)
 
 ## Python API Usage
 
