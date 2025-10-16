@@ -4,7 +4,61 @@
 
 ## Overview
 
-Version 2.0.1 introduces a powerful new CLI command for encryption key management with comprehensive backup and rotation capabilities.
+Version 2.0.1 introduces a powerful new CLI command for encryption key management with comprehensive backup and rotation
+capabilities, improved CLI help text formatting, enhanced testing infrastructure,
+and automated PyPI publishing workflow.
+
+## Quick Summary
+
+### New Features
+- **`generate-key` Command** - Complete encryption key lifecycle management with backup and rekey
+- **Automated PyPI Publishing** - GitHub Actions workflow for seamless releases
+- **Improved CLI Help** - Better formatted terminal output across all commands
+- **VS Code Test Support** - Fixed pytest integration for Test Explorer
+
+### Statistics
+- **19 files changed**
+- **2,316 additions** (+)
+- **512 deletions** (-)
+- **Net change**: +1,804 lines
+- **All 99 tests passing** ✓
+
+### Major File Changes
+| File                            | Changes    | Description                                |
+| ------------------------------- | ---------- | ------------------------------------------ |
+| `vaulttool/cli.py`              | +474 lines | New generate-key command + help formatting |
+| `docs/PYPI_RELEASE_WORKFLOW.md` | +451 lines | Complete release automation guide          |
+| `docs/GENERATE_KEY_FEATURE.md`  | +371 lines | Feature documentation                      |
+| `README.md`                     | +267 lines | Enhanced usage documentation               |
+| `CHANGELOG.md`                  | +118 lines | Detailed changelog                         |
+| `.github/workflows/release.yml` | +106 lines | PyPI publishing workflow                   |
+| `docs/README.md`                | +102 lines | Documentation index                        |
+
+### Key Changes Summary
+
+#### New Features
+1. **`generate-key` Command** - Complete encryption key lifecycle management
+2. **Automated PyPI Publishing** - GitHub Actions workflow for releases
+3. **Improved CLI Help Text** - Better formatted terminal output with preserved line breaks
+4. **Test Infrastructure** - New pytest configuration for VS Code compatibility
+
+#### Code Changes
+- **vaulttool/cli.py** (+474 lines) - New `generate-key` command and improved help formatting
+- **vaulttool/tests/conftest.py** (+29 lines, new file) - Auto-restore working directory fixture
+- **vaulttool/tests/test_checksum_trigger.py** - Enhanced with proper directory handling
+- **.github/workflows/release.yml** (+106 lines, new file) - Automated PyPI publishing
+
+#### Documentation
+- **docs/GENERATE_KEY_FEATURE.md** (+371 lines, new file) - Comprehensive feature documentation
+- **docs/PYPI_RELEASE_WORKFLOW.md** (+451 lines, new file) - Complete release process guide
+- **docs/README.md** (+102 lines, new file) - Documentation index
+- **README.md** - Enhanced with generate-key usage and examples
+- **CHANGELOG.md** - Detailed v2.0.1 changelog entry
+
+#### Infrastructure
+- **Removed**: `vaulttool-generate-key.sh` (replaced by native CLI command)
+- **Removed**: `wip_pre-commit.yml` (housekeeping)
+- **Moved**: `.github/GITHUB_ACTIONS_CI.md` → `docs/GITHUB_ACTIONS_CI.md`
 
 ## What's New
 
@@ -50,13 +104,13 @@ vaulttool generate-key --rekey --force
 
 #### Options
 
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--key-file` | `-k` | Path to key file (default: from config) |
-| `--rekey` | | Re-encrypt all vault files with new key |
-| `--force` | | Skip confirmation prompts |
-| `--verbose` | `-v` | Enable debug logging |
-| `--quiet` | `-q` | Show errors only |
+| Option       | Short | Description                             |
+| ------------ | ----- | --------------------------------------- |
+| `--key-file` | `-k`  | Path to key file (default: from config) |
+| `--rekey`    |       | Re-encrypt all vault files with new key |
+| `--force`    |       | Skip confirmation prompts               |
+| `--verbose`  | `-v`  | Enable debug logging                    |
+| `--quiet`    | `-q`  | Show errors only                        |
 
 ## Use Cases
 
@@ -142,6 +196,111 @@ When `--rekey` is specified, the command performs:
   - Error messages and solutions
   - Process flow diagrams
 
+- **docs/PYPI_RELEASE_WORKFLOW.md**: Complete PyPI release automation guide
+  - GitHub Actions workflow configuration
+  - Release process documentation
+  - Security best practices
+  - Troubleshooting guide
+
+- **docs/README.md**: Documentation directory index
+
+- **docs/GITHUB_ACTIONS_CI.md**: Moved from `.github/` for better organization
+
+## CLI Improvements
+
+### Improved Help Text Formatting
+
+All CLI commands now use Click's `\b` directive for proper terminal formatting:
+
+- **Main app help**: Preserved line breaks and indentation for better readability
+- **All subcommands**: Enhanced help text with proper formatting
+  - `generate-key` - Structured sections with examples
+  - `version` - Simplified output
+  - `gen-vaulttool` - Clear usage instructions
+  - `remove` - Concise description
+  - `encrypt` - Options and examples properly formatted
+  - `refresh` - Options and examples properly formatted
+  - `check-ignore` - Clear purpose statement
+
+**Before:**
+```
+Encrypts sensitive files using AES-256-CBC and manages their encrypted counterparts. Key Options: encrypt --force Re-encrypt all files (ignores checksums) refresh --no-force Only restore missing files...
+```
+
+**After:**
+```
+Encrypts sensitive files using AES-256-CBC and manages their encrypted counterparts.
+
+Key Options:
+  encrypt --force      Re-encrypt all files (ignores checksums)
+  refresh --no-force   Only restore missing files
+  generate-key         Create new encryption key with backup
+```
+
+## Testing Improvements
+
+### VS Code Pytest Integration
+
+**New File: `vaulttool/tests/conftest.py`**
+
+Added an auto-use pytest fixture to fix issues with VS Code's Test Explorer:
+
+```python
+@pytest.fixture(autouse=True)
+def preserve_cwd():
+    """Automatically preserve and restore the current working directory."""
+```
+
+**Features:**
+- Automatically runs for all tests
+- Saves and restores working directory
+- Prevents `FileNotFoundError` in VS Code Test Explorer
+- Handles edge cases where directories are deleted during tests
+
+**Fixed Test: `test_checksum_trigger.py`**
+- Added explicit try-finally blocks
+- Proper directory restoration before temp directory cleanup
+- Prevents VS Code pytest plugin failures
+
+**VS Code Configuration:**
+```json
+{
+  "python.testing.pytestArgs": ["vaulttool/tests"],
+  "python.testing.cwd": "${workspaceFolder}"
+}
+```
+
+All 99 tests now pass in both terminal and VS Code Test Explorer.
+
+## DevOps & Automation
+
+### GitHub Actions - PyPI Publishing
+
+**New File: `.github/workflows/release.yml`**
+
+Automated release workflow that triggers on version tags:
+
+**Features:**
+- Automatic triggering on `v*` tags (e.g., `v2.0.1`)
+- Version validation against `pyproject.toml`
+- Poetry-based build process
+- Automated PyPI publishing via trusted publishing
+- Build artifact retention (30 days)
+
+**Release Process:**
+```bash
+git tag v2.0.1
+git push origin v2.0.1
+# GitHub Actions automatically builds and publishes to PyPI
+```
+
+**Security:**
+- Uses OpenID Connect (OIDC) trusted publishing
+- No API tokens stored in repository
+- Configured through PyPI project settings
+
+## Documentation Updates
+
 ## Testing
 
 - All 99 tests pass
@@ -159,6 +318,24 @@ When `--rekey` is specified, the command performs:
 - **Python**: 3.10+
 - **Dependencies**: No new dependencies
 - **Configuration**: No changes required
+- **VS Code**: Enhanced test runner support
+- **CI/CD**: New GitHub Actions workflow for automated releases
+
+## Commit History
+
+This release includes commits from the following features and fixes:
+
+1. **feat-pypi-publishing**: PyPI automation and generate-key command
+2. **5-fix-helptext**: CLI help text formatting improvements  
+3. **6-python-tests-in-vscode**: VS Code pytest integration fixes
+
+**Merged Pull Requests:**
+- #9: Python tests in VS Code
+- #8: Fix help text formatting
+- #7: PyPI publishing workflow
+- #4: Sync with main branch
+
+## Testing
 
 ## Upgrade Instructions
 
@@ -185,11 +362,51 @@ vaulttool version  # Should show 2.0.1
 
 ### Files Modified
 
-- `vaulttool/cli.py` - Added `generate_key_cmd()` function (~250 lines)
-- `README.md` - Enhanced documentation
-- `CHANGELOG.md` - Added v2.0.1 entry
+**Core Application:**
+- `vaulttool/cli.py` - Added `generate_key_cmd()` function (~250 lines) + improved help text formatting
+- `vaulttool/__init__.py` - Minor refactoring
+- `vaulttool/config.py` - Code improvements
+- `vaulttool/core.py` - Enhanced error handling and logging
+- `vaulttool/utils.py` - Improved utility functions
 - `pyproject.toml` - Updated version to 2.0.1
-- `docs/GENERATE_KEY_FEATURE.md` - Created comprehensive feature doc
+
+**Testing:**
+- `vaulttool/tests/conftest.py` - New file with `preserve_cwd` fixture
+- `vaulttool/tests/test_checksum_trigger.py` - Enhanced directory handling
+
+**Documentation:**
+- `README.md` - Enhanced with new command documentation
+- `CHANGELOG.md` - Added v2.0.1 comprehensive entry
+- `docs/GENERATE_KEY_FEATURE.md` - New comprehensive feature guide
+- `docs/PYPI_RELEASE_WORKFLOW.md` - New release automation guide
+- `docs/README.md` - New documentation index
+- `docs/GITHUB_ACTIONS_CI.md` - Moved from `.github/` directory
+- `docs/RELEASE_v2.0.1.md` - This release summary
+
+**DevOps:**
+- `.github/workflows/release.yml` - New PyPI publishing workflow
+
+**Removed:**
+- `vaulttool-generate-key.sh` - Replaced by native CLI command
+- `wip_pre-commit.yml` - Housekeeping cleanup
+
+## Code Quality Improvements
+
+### Logging and Error Handling
+- Enhanced error messages throughout codebase
+- Better exception handling in crypto operations
+- Improved debug logging for troubleshooting
+- Consistent error reporting patterns
+
+### Code Refactoring
+- Improved function organization in `cli.py`
+- Better separation of concerns
+- Enhanced docstrings and comments
+- Consistent code style
+
+## Breaking Changes
+
+**None** - This release is fully backward compatible.
 
 ### Performance
 
