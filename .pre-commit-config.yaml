@@ -3,13 +3,13 @@ repos:
     hooks:
       - id: vaulttool-encrypt
         name: VaultTool Encrypt
-        entry: poetry run vaulttool encrypt
+        entry: bash -c 'if [ -f .vaulttool.yml ]; then poetry run vaulttool encrypt; else echo "Skipping VaultTool encrypt - no .vaulttool.yml found"; fi'
         language: system
         pass_filenames: false
         always_run: true
       - id: vaulttool-check-ignore
         name: VaultTool Check Ignore
-        entry: poetry run vaulttool check-ignore
+        entry: bash -c 'if [ -f .vaulttool.yml ]; then poetry run vaulttool check-ignore; else echo "Skipping VaultTool check-ignore - no .vaulttool.yml found"; fi'
         language: system
         pass_filenames: false
       - id: pytest
