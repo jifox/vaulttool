@@ -1,7 +1,7 @@
 import tempfile
 import os
 from pathlib import Path
-from vaulttool.core import encrypt_files, decrypt_missing_sources
+from vaulttool.core import VaultTool
 
 def test_decrypt_missing_sources_restores_file():
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -14,29 +14,33 @@ def test_decrypt_missing_sources_restores_file():
         key_path = Path(tmpdir) / "keyfile"
         with open(key_path, "w") as kf:
             kf.write("mysecretpassword")
-        # Write config
-        config = {
-            "include_directories": [tmpdir],
-            "exclude_directories": [],
-            "include_patterns": ["*.env"],
-            "exclude_patterns": [],
-            "options": {
-                "suffix": ".vault",
-                "openssl_path": "openssl",
-                "algorithm": "aes-256-cbc",
-                "key_type": "file",
-                "key_file": str(key_path)
-            }
-        }
-        # Encrypt file to create .vault
-        encrypt_files(config)
+        # Write config YAML
+        config_yaml = f"""
+vaulttool:
+  include_directories: ['{tmpdir}']
+  exclude_directories: []
+  include_patterns: ['*.env']
+  exclude_patterns: []
+  options:
+    suffix: ".vault"
+    openssl_path: "openssl"
+    algorithm: "aes-256-cbc"
+    key_file: "{key_path}"
+"""
+        with open(".vaulttool.yml", "w") as cf:
+            cf.write(config_yaml)
+        
+        # Create VaultTool instance and encrypt file to create .vault
+        vt = VaultTool()
+        vt.encrypt_task()
+        
         vault_path = plain_path.with_suffix(plain_path.suffix + ".vault")
         assert vault_path.exists()
         # Remove the source file
         plain_path.unlink()
         assert not plain_path.exists()
         # Run decrypt_missing_sources
-        decrypt_missing_sources(config)
+        vt.refresh_task()
         # Source file should be restored
         assert plain_path.exists()
         with open(plain_path) as pf:

@@ -1,0 +1,248 @@
+---
+# VaultTool Configuration Example
+# 
+# Copy this file to .vaulttool.yml and customize for your environment.
+# The actual .vaulttool.yml should be encrypted and stored as .vaulttool.yml.vault
+#
+# To create your configuration:
+# 1. cp .vaulttool.yml.example .vaulttool.yml
+# 2. Edit .vaulttool.yml with your actual paths and settings
+# 3. Generate encryption key: vaulttool generate-key > ~/.vaulttool/vault.key
+# 4. Encrypt: vaulttool encrypt
+#
+# Note: .vaulttool.yml is in .gitignore and should never be committed
+# All options shown below with their default values and descriptions
+
+vaulttool:
+  # ============================================================================
+  # DIRECTORY CONFIGURATION
+  # ============================================================================
+  
+  # Directories to search for files to encrypt
+  # Type: List of strings (paths)
+  # Default: ["."] (current directory)
+  # Can be overridden with: VAULTTOOL_INCLUDE_DIRECTORIES
+  include_directories:
+    - "."              # Current directory
+    # - "src"          # Source code directory
+    # - "configs"      # Configuration directory
+    # - "secrets"      # Secrets directory
+
+  # Directories to exclude from encryption search
+  # Type: List of strings (directory names or paths)
+  # Default: [] (no exclusions)
+  # Can be overridden with: VAULTTOOL_EXCLUDE_DIRECTORIES
+  exclude_directories:
+    - ".venv"          # Python virtual environment
+    - ".git"           # Git repository data
+    - "__pycache__"    # Python cache
+    - "node_modules"   # Node.js dependencies
+    - "dist"           # Build output
+    - "build"          # Build artifacts
+    - ".pytest_cache"  # Pytest cache
+    - ".tox"           # Tox testing
+    - "venv"           # Alternative venv name
+    - "env"            # Alternative env name
+
+  # ============================================================================
+  # FILE PATTERN CONFIGURATION
+  # ============================================================================
+
+  # File patterns to include for encryption (glob patterns)
+  # Type: List of strings (glob patterns)
+  # Default: [] (include all files not excluded)
+  # Can be overridden with: VAULTTOOL_INCLUDE_PATTERNS
+  include_patterns:
+    - "*.env"          # Environment files
+    - "*.ini"          # INI configuration files
+    - "*.json"         # JSON configuration files
+    - "*.yaml"         # YAML files
+    - "*.yml"          # YML files
+    # - "*.secret"     # Files ending with .secret
+    # - "*.credentials"  # Credential files
+    # - "*.key"        # Key files (be careful!)
+    # - "secrets/*"    # All files in secrets directory
+
+  # File patterns to exclude from encryption (glob patterns)
+  # Type: List of strings (glob patterns)
+  # Default: [] (no exclusions, but vault suffix is auto-added)
+  # Can be overridden with: VAULTTOOL_EXCLUDE_PATTERNS
+  # Note: The vault suffix pattern is AUTOMATICALLY added to this list
+  exclude_patterns:
+    - "*.log"          # Log files
+    - "*example*"      # Example files
+    - "*sample*"       # Sample files
+    - "*.md"           # Markdown documentation
+    - "*.txt"          # Text files
+    - "*.bak"          # Backup files
+    - "*.tmp"          # Temporary files
+    # - "*.vault"      # Vault files (auto-excluded based on suffix option)
+
+  # ============================================================================
+  # ENCRYPTION OPTIONS
+  # ============================================================================
+
+  options:
+    # ------------------------------------------------------------------------
+    # Vault File Suffix
+    # ------------------------------------------------------------------------
+    # Suffix appended to encrypted files
+    # Type: String
+    # Default: ".vault"
+    # Must end with: ".vault" (enforced for safety)
+    # Can be overridden with: VAULTTOOL_OPTIONS_SUFFIX
+    # Examples:
+    #   ".vault"         -> config.env.vault
+    #   ".prod.vault"    -> config.env.prod.vault
+    #   ".secret.vault"  -> config.env.secret.vault
+    suffix: ".vault"
+    
+    # ------------------------------------------------------------------------
+    # Encryption Algorithm
+    # ------------------------------------------------------------------------
+    # Type: String
+    # Default: "aes-256-cbc"
+    # Note: This is informational only. VaultTool always uses AES-256-CBC
+    #       with HMAC-SHA256 for authentication. This option is kept for
+    #       backward compatibility.
+    algorithm: "aes-256-cbc"
+    
+    # ------------------------------------------------------------------------
+    # Key Storage Type
+    # ------------------------------------------------------------------------
+    # Type: String
+    # Default: "file"
+    # Note: Only "file" is supported. This option is kept for potential
+    #       future expansion (e.g., HSM, key management services).
+    key_type: "file"
+    
+    # ------------------------------------------------------------------------
+    # Encryption Key File Path
+    # ------------------------------------------------------------------------
+    # Path to your encryption key file
+    # Type: String (file path)
+    # Default: "~/.vaulttool/vault.key" (user's home directory)
+    # Can be overridden with: VAULTTOOL_OPTIONS_KEY_FILE
+    # 
+    # Key Requirements:
+    #   - Must contain at least 32 bytes (64 hex characters)
+    #   - Should be randomly generated
+    #   - Must have restricted permissions (chmod 600)
+    #   - Should NEVER be committed to version control
+    #
+    # Generate key:
+    #   python3 -c "import secrets; print(secrets.token_hex(32))" > ~/.vaulttool/vault.key
+    #   chmod 600 ~/.vaulttool/vault.key
+    key_file: "~/.vaulttool/vault.key"
+    
+    # ------------------------------------------------------------------------
+    # Suffix Fallback (RECOMMENDED: enabled)
+    # ------------------------------------------------------------------------
+    # Enable automatic fallback to generic .vault files during decryption
+    # Type: Boolean
+    # Default: true (enabled)
+    # Can be overridden with: VAULTTOOL_OPTIONS_USE_SUFFIX_FALLBACK
+    #
+    # When enabled with a custom suffix (e.g., ".prod.vault"):
+    #   - Encryption: Always creates files with custom suffix
+    #                 e.g., config.env -> config.env.prod.vault
+    #   - Decryption: First tries custom suffix, then falls back to .vault
+    #                 e.g., tries config.env.prod.vault, then config.env.vault
+    #
+    # Use cases:
+    #   - Gradual migration from .vault to environment-specific suffixes
+    #   - Supporting multiple environments (dev/staging/prod)
+    #   - Backward compatibility with existing .vault files
+    #
+    # Example workflows:
+    #   1. Development environment:
+    #      suffix: ".dev.vault"
+    #      use_suffix_fallback: true
+    #      -> Can decrypt both .dev.vault and legacy .vault files
+    #
+    #   2. Production environment:
+    #      suffix: ".prod.vault"
+    #      use_suffix_fallback: true
+    #      -> Can decrypt both .prod.vault and legacy .vault files
+    #
+    #   3. Strict mode (no fallback):
+    #      suffix: ".prod.vault"
+    #      use_suffix_fallback: false
+    #      -> Only decrypts .prod.vault files (enforces environment separation)
+    use_suffix_fallback: true
+
+# ============================================================================
+# ENVIRONMENT VARIABLE OVERRIDES
+# ============================================================================
+#
+# All configuration options can be overridden using environment variables
+# with the VAULTTOOL_ prefix. Environment variables take precedence over
+# file configuration.
+#
+# Naming pattern: VAULTTOOL_<SECTION>_<KEY>=<VALUE>
+#
+# Examples:
+#   # Override key file location
+#   export VAULTTOOL_OPTIONS_KEY_FILE="/custom/path/vault.key"
+#
+#   # Override suffix
+#   export VAULTTOOL_OPTIONS_SUFFIX=".prod.vault"
+#
+#   # Enable/disable suffix fallback
+#   export VAULTTOOL_OPTIONS_USE_SUFFIX_FALLBACK=true
+#
+#   # Override include patterns (comma-separated)
+#   export VAULTTOOL_INCLUDE_PATTERNS="*.env,*.ini,*.secret"
+#
+#   # Override exclude directories (comma-separated)
+#   export VAULTTOOL_EXCLUDE_DIRECTORIES=".git,.venv,node_modules"
+#
+#   # Override include directories (comma-separated)
+#   export VAULTTOOL_INCLUDE_DIRECTORIES="src,configs"
+#
+# Boolean values (case-insensitive):
+#   True:  true, True, TRUE, yes, Yes, 1, on
+#   False: false, False, FALSE, no, No, 0, off
+#
+# For complete documentation, see: ENVIRONMENT_VARIABLES.md
+
+# ============================================================================
+# ADDITIONAL RESOURCES
+# ============================================================================
+#
+# Documentation:
+#   - README.md                    - Main documentation
+#   - ENVIRONMENT_VARIABLES.md     - Environment variable configuration
+#   - SUFFIX_FALLBACK.md           - Suffix fallback feature details
+#   - ENCRYPTED_CONFIG_SETUP.md    - Encrypted configuration setup guide
+#
+# Commands:
+#   vaulttool --help               - Show all commands
+#   vaulttool generate-key         - Generate encryption key
+#   vaulttool gen-vaulttool        - Generate example configuration
+#   vaulttool encrypt              - Encrypt matching files
+#   vaulttool refresh              - Decrypt/restore files from vaults
+#   vaulttool remove               - Remove all vault files
+#   vaulttool check-ignore         - Verify .gitignore entries
+#   vaulttool version              - Show version information
+#
+# Security Best Practices:
+#   1. Use strong, randomly generated encryption keys (32+ bytes)
+#   2. Store keys securely (encrypted filesystem, HSM, password manager)
+#   3. Never commit keys or plaintext secrets to version control
+#   4. Set restrictive permissions on key files (chmod 600)
+#   5. Use environment-specific suffixes for different deployments
+#   6. Regularly rotate encryption keys
+#   7. Back up keys in secure, separate location
+#   8. Use pre-commit hooks to ensure encryption before commits
+#
+# Pre-commit Integration:
+#   Add to .pre-commit-config.yaml:
+#   repos:
+#     - repo: local
+#       hooks:
+#         - id: vaulttool
+#           name: Encrypt sensitive files
+#           entry: vaulttool
+#           language: system
+#           always_run: true

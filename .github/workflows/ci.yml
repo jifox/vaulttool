@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  pre-commit:
+    name: Pre-commit checks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+      
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --no-root
+      
+      - name: Install project
+        run: poetry install --no-interaction
+      
+      - name: Create test key file
+        run: |
+          mkdir -p ~/.vaulttool
+          python3 -c "import secrets; print(secrets.token_hex(32))" > ~/.vaulttool/vault.key
+          chmod 600 ~/.vaulttool/vault.key
+      
+      - name: Set up pre-commit cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      
+      - name: Run pre-commit hooks
+        run: poetry run pre-commit run --all-files --show-diff-on-failure
+      
+      - name: Clean up test artifacts
+        if: always()
+        run: |
+          # Remove any vault files created during tests
+          find . -name "*.vault" -type f -delete
+          # Remove any temporary test directories
+          find . -path "./.venv" -prune -o -type d -name "tmp*" -exec rm -rf {} + 2>/dev/null || true
+          # Remove pytest cache
+          rm -rf .pytest_cache
+          # Remove any leftover .vaulttool.yml test files in unexpected locations
+          find . -path "./.venv" -prune -o -name ".vaulttool.yml" ! -path "./.vaulttool.yml" -type f -delete 2>/dev/null || true
+  
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+      
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --no-root
+      
+      - name: Install project
+        run: poetry install --no-interaction
+      
+      - name: Create test key file
+        run: |
+          mkdir -p ~/.vaulttool
+          python3 -c "import secrets; print(secrets.token_hex(32))" > ~/.vaulttool/vault.key
+          chmod 600 ~/.vaulttool/vault.key
+      
+      - name: Run tests with coverage
+        run: |
+          poetry run pytest -v --cov=vaulttool --cov-report=xml --cov-report=term
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.12'
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+      
+      - name: Clean up test artifacts
+        if: always()
+        run: |
+          # Remove any vault files created during tests
+          find . -name "*.vault" -type f -delete
+          # Remove any temporary test directories
+          find . -path "./.venv" -prune -o -type d -name "tmp*" -exec rm -rf {} + 2>/dev/null || true
+          # Remove pytest cache
+          rm -rf .pytest_cache
+          # Remove coverage files
+          rm -f .coverage coverage.xml
+          # Remove any leftover .vaulttool.yml test files
+          find . -path "./.venv" -prune -o -name ".vaulttool.yml" ! -path "./.vaulttool.yml" -type f -delete 2>/dev/null || true

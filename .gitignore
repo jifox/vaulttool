@@ -54,4 +54,13 @@ coverage.xml
 
 # VaultTool
 .vscode/launch.json
-../../.vaulttool/aes-gcm.key
+
+# VaultTool Configuration (encrypted version is tracked)
+.env
+.vaulttool.yml
+!.vaulttool.yml.vault
+!.vaulttool.yml.example
+
+# Local encryption keys (NEVER commit!)
+*.key
+!*.key.example
