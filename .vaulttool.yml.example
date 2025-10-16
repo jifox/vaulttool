@@ -1,0 +1,65 @@
+---
+# VaultTool Configuration Example
+# 
+# Copy this file to .vaulttool.yml and customize for your environment.
+# The actual .vaulttool.yml should be encrypted and stored as .vaulttool.yml.vault
+#
+# To create your configuration:
+# 1. cp .vaulttool.yml.example .vaulttool.yml
+# 2. Edit .vaulttool.yml with your actual paths and settings
+# 3. Generate encryption key: ./vaulttool-generate-key.sh
+# 4. Encrypt: vaulttool encrypt (if .vaulttool.yml matches patterns)
+#    OR manually: create a simple script to encrypt this specific file
+#
+# Note: .vaulttool.yml is in .gitignore and should never be committed
+
+vaulttool:
+  # Directories to search for files to encrypt
+  include_directories:
+    - "."  # Current directory - adjust as needed
+
+  # Directories to exclude from vaulting
+  exclude_directories:
+    - ".venv"
+    - ".git"
+    - "__pycache__"
+    - "node_modules"
+    - "dist"
+    - "build"
+
+  # File patterns to include for encryption
+  include_patterns:
+    - "*.env"
+    - "*.ini"
+    - "*.json"
+    - "*.yaml"
+    - "*.yml"
+
+  # File patterns to exclude
+  exclude_patterns:
+    - "*.log"
+    - "*example*"
+    - "*.vault"  # Never encrypt vault files themselves
+    - "*.md"     # Skip documentation
+
+  options:
+    # Vault file suffix
+    suffix: ".vault"
+    
+    # Encryption algorithm (default: aes-256-cbc)
+    algorithm: "aes-256-cbc"
+    
+    # Key storage type (only "file" is supported)
+    key_type: "file"
+    
+    # Path to your encryption key file
+    # Generate with: ./vaulttool-generate-key.sh
+    # Default location: ~/.vaulttool/vault.key
+    key_file: "~/.vaulttool/vault.key"
+    
+    # Optional: Enable branch-aware vault file naming
+    # When enabled, vault files include branch name:
+    #   config.env.main.vault (on main branch)
+    #   config.env.develop.vault (on develop branch)
+    # Default: false (backward compatible)
+    # use_branch_suffix: false

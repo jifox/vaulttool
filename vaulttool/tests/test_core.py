@@ -75,10 +75,35 @@ def test_source_filename_static_method():
 
 
 def test_vault_filename_static_method():
-    """Test the static vault_filename method."""
-    assert VaultTool.vault_filename("config.env", ".vault") == "config.env.vault"
-    assert VaultTool.vault_filename("secrets/api.key", ".vault") == "secrets/api.key.vault"
-    assert VaultTool.vault_filename("config.env", "_prod.vault") == "config.env_prod.vault"
+    """Test the vault_filename method with default settings (backward compatibility)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        os.chdir(tmpdir)
+        
+        # Create minimal config with use_branch_suffix=False (default)
+        key_path = Path(tmpdir) / "keyfile"
+        key_path.write_bytes(b"test_key_minimum_16_bytes")
+        
+        config_yaml = f"""
+vaulttool:
+  include_directories: ['{tmpdir}']
+  exclude_directories: []
+  include_patterns: ['*.env']
+  exclude_patterns: []
+  options:
+    suffix: ".vault"
+    key_file: "{key_path}"
+"""
+        with open(".vaulttool.yml", "w") as cf:
+            cf.write(config_yaml)
+        
+        vt = VaultTool()
+        
+        # Test with default suffix
+        assert vt.vault_filename("config.env") == "config.env.vault"
+        assert vt.vault_filename("secrets/api.key") == "secrets/api.key.vault"
+        
+        # Test with custom suffix
+        assert vt.vault_filename("config.env", "_prod.vault") == "config.env_prod.vault"
 
 
 def test_constructor_suffix_validation():

@@ -179,3 +179,73 @@ def encode_base64(data: bytes) -> bytes:
         b'aGVsbG8gd29ybGQ='
     """
     return base64.b64encode(data)
+
+
+def get_git_branch() -> str:
+    """Get the current git branch name.
+    
+    Attempts to determine the current git branch name by checking:
+    1. The .git/HEAD file to extract the branch reference
+    2. Falls back to 'main' if not in a git repository or on detached HEAD
+    
+    Returns:
+        The current git branch name, or 'main' if not in a git repo or detached HEAD.
+        Branch names are sanitized to be filesystem-safe (alphanumeric, dash, underscore only).
+        
+    Example:
+        >>> get_git_branch()
+        'feature-add-encryption'
+        >>> get_git_branch()  # Not in git repo
+        'main'
+    """
+    import re
+    import subprocess
+    
+    try:
+        # Try using git command first (most reliable)
+        result = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False
+        )
+        
+        if result.returncode == 0:
+            branch = result.stdout.strip()
+            # Sanitize branch name for filesystem use
+            # Keep alphanumeric, dash, underscore; replace others with dash
+            sanitized = re.sub(r'[^a-zA-Z0-9_-]', '-', branch)
+            # Remove leading/trailing dashes
+            sanitized = sanitized.strip('-')
+            # Collapse multiple dashes
+            sanitized = re.sub(r'-+', '-', sanitized)
+            
+            if sanitized and sanitized != 'HEAD':
+                logger.debug(f"Detected git branch: {sanitized}")
+                return sanitized
+    
+    except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
+        logger.debug(f"Could not determine git branch via command: {e}")
+    
+    # Fallback: try reading .git/HEAD directly
+    try:
+        git_head = Path('.git/HEAD')
+        if git_head.exists():
+            content = git_head.read_text().strip()
+            if content.startswith('ref: refs/heads/'):
+                branch = content.replace('ref: refs/heads/', '')
+                # Sanitize branch name
+                sanitized = re.sub(r'[^a-zA-Z0-9_-]', '-', branch)
+                sanitized = sanitized.strip('-')
+                sanitized = re.sub(r'-+', '-', sanitized)
+                
+                if sanitized:
+                    logger.debug(f"Detected git branch from .git/HEAD: {sanitized}")
+                    return sanitized
+    except Exception as e:
+        logger.debug(f"Could not read .git/HEAD: {e}")
+    
+    # Default fallback
+    logger.debug("No git branch detected, using 'main' as default")
+    return 'main'

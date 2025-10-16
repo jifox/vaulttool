@@ -7,6 +7,40 @@
 
 A simple tool that allows you to automatically encrypt your secrets and configuration files so that they can be safely stored in your version control system.
 
+## TL;DR
+
+```bash
+# Install
+pip install vaulttool
+
+# Generate encryption key (keep this secret!)
+mkdir -p ~/.vaulttool
+vaulttool generate-key > ~/.vaulttool/vault.key
+
+# Create configuration and edit it
+vaulttool generate-config > .vaulttool.yml
+nano .vaulttool.yml
+
+# Encrypt your secrets
+vaulttool encrypt
+
+# Commit encrypted .vault files to git
+git add *.vault .vaulttool.yml
+git commit -m "Add encrypted configuration"
+
+# On another machine: decrypt to restore plaintext files
+vaulttool refresh
+```
+
+**Key Concepts:**
+
+- Encrypts files with AES-256-CBC + HMAC-SHA256
+- Creates `.vault` files that are safe to commit to git
+- Uses a single encryption key (store securely, don't commit!)
+- Configure via `.vaulttool.yml` or environment variables
+- Suffix fallback: decrypt from `.vault` when custom suffix missing
+- Works with pre-commit hooks for automatic encryption
+
 ## Table of Contents
 
 - [Features](#features)
@@ -26,6 +60,7 @@ A simple tool that allows you to automatically encrypt your secrets and configur
   - [Install Vault Tool (Recommended: Poetry)](#install-vault-tool-recommended-poetry)
   - [Generate Encryption Key](#generate-encryption-key)
 - [Configuration](#configuration)
+  - [Environment Variable Configuration](#environment-variable-configuration)
 - [Usage](#usage)
   - [Generate example configuration](#generate-example-configuration)
   - [Display version information](#display-version-information)
@@ -413,6 +448,114 @@ vaulttool:
 
 Edit `.vaulttool.yml` to match your project structure and security requirements.
 
+### Environment Variable Configuration
+
+VaultTool supports configuration via environment variables with the `VAULTTOOL_` prefix. This allows dynamic configuration without modifying `.vaulttool.yml` files, making it ideal for:
+
+- CI/CD pipelines
+- Docker containers  
+- Different environments (dev/staging/production)
+- Temporary overrides
+
+**Configuration Priority:** Environment variables **override** file configuration settings.
+
+#### Environment Variable Naming Pattern
+
+```
+VAULTTOOL_<SECTION>_<KEY>=<VALUE>
+```
+
+**Available Variables:**
+
+**Top-Level Lists:**
+
+- `VAULTTOOL_INCLUDE_DIRECTORIES`
+- `VAULTTOOL_EXCLUDE_DIRECTORIES`
+- `VAULTTOOL_INCLUDE_PATTERNS`
+- `VAULTTOOL_EXCLUDE_PATTERNS`
+
+**Options (Nested):**
+
+- `VAULTTOOL_OPTIONS_SUFFIX`
+- `VAULTTOOL_OPTIONS_KEY_FILE`
+- `VAULTTOOL_OPTIONS_USE_SUFFIX_FALLBACK`
+
+#### Data Types
+
+**Strings:**
+
+```bash
+export VAULTTOOL_OPTIONS_KEY_FILE="/path/to/key"
+export VAULTTOOL_OPTIONS_SUFFIX=".vault"
+```
+
+**Booleans** (case-insensitive):
+
+- True: `true`, `True`, `TRUE`, `yes`, `Yes`, `1`, `on`
+- False: `false`, `False`, `no`, `0`, `off`
+
+```bash
+export VAULTTOOL_OPTIONS_USE_SUFFIX_FALLBACK=true
+```
+
+**Lists** (comma-separated, spaces auto-trimmed):
+
+```bash
+export VAULTTOOL_INCLUDE_PATTERNS="*.env,*.ini,*.secret"
+export VAULTTOOL_EXCLUDE_DIRECTORIES=".git,.venv,node_modules"
+```
+
+#### Example: CI/CD Pipeline
+
+```bash
+#!/bin/bash
+# .gitlab-ci.yml or similar
+
+# Override key file for CI environment
+export VAULTTOOL_OPTIONS_KEY_FILE="/ci/secrets/vault.key"
+
+# Enable suffix fallback
+export VAULTTOOL_OPTIONS_USE_SUFFIX_FALLBACK=true
+
+# Only encrypt specific patterns
+export VAULTTOOL_INCLUDE_PATTERNS="*.env,*.credentials"
+
+# Run encryption
+vaulttool encrypt
+```
+
+#### Example: Docker Container
+
+```dockerfile
+FROM python:3.12
+
+# Install vaulttool
+RUN pip install vaulttool
+
+# Set environment-specific configuration
+ENV VAULTTOOL_OPTIONS_KEY_FILE=/run/secrets/vault_key
+ENV VAULTTOOL_OPTIONS_USE_SUFFIX_FALLBACK=true
+ENV VAULTTOOL_INCLUDE_DIRECTORIES=/app/config
+ENV VAULTTOOL_INCLUDE_PATTERNS="*.env,*.secret"
+ENV VAULTTOOL_EXCLUDE_DIRECTORIES=".git,.venv"
+
+WORKDIR /app
+CMD ["vaulttool", "encrypt"]
+```
+
+#### Validation Rules
+
+1. **Suffix Must End with `.vault`**: When setting via environment variable, the suffix must end with `.vault`
+
+   ```bash
+   export VAULTTOOL_OPTIONS_SUFFIX=".secret.vault"  # ✓ Valid
+   export VAULTTOOL_OPTIONS_SUFFIX=".encrypted"     # ✗ Invalid
+   ```
+
+2. **Auto-Exclusion**: The suffix pattern is automatically added to `exclude_patterns`
+
+For complete documentation on environment variables, see [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) and [SUFFIX_FALLBACK.md](./SUFFIX_FALLBACK.md).
+
 ## Usage
 
 ### Generate example configuration
@@ -461,6 +604,12 @@ vaulttool remove [OPTIONS]
 ```
 
 This will search the configured directories and delete all matching vault files.
+
+**Note:** When `use_suffix_fallback` is enabled (default) and a custom suffix is configured, this command removes BOTH:
+- Vault files with the custom suffix (e.g., `secret.env.prod.vault`)
+- Fallback `.vault` files (e.g., `secret.env.vault`)
+
+This ensures complete cleanup of all vault files in your project.
 
 ### Refresh plaintext from vaults
 

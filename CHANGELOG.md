@@ -21,6 +21,7 @@ Version 2.0.0 represents a major quality improvement with comprehensive error ha
 ### ✨ Added
 
 #### Security & Reliability
+
 - **Key Material Validation**: Enforces minimum 32-byte key size with informative error messages
 - **File Write Verification**: Validates encrypted file integrity immediately after write operations
 - **HMAC Validation Enhancement**: Enhanced tamper detection with detailed error reporting
@@ -28,12 +29,14 @@ Version 2.0.0 represents a major quality improvement with comprehensive error ha
 - **Crypto Operation Validation**: Input format validation before decryption (length checks, block alignment)
 
 #### Error Handling & Diagnostics
+
 - **Exception Chaining**: All exceptions now preserve full context with `from e` syntax for complete debugging information
 - **Enhanced Error Messages**: Configuration errors now include exact field names, expected formats, and actionable guidance
 - **Path Validation Context**: Full exception context chain showing what operation was attempted and why it failed
 - **Improved CLI Error Handling**: Graceful version detection with multiple fallback methods and specific exception handling
 
 #### Logging & Visibility
+
 - **Comprehensive Debug Logging**: Detailed operation flow for troubleshooting
   - Key derivation operations
   - Encryption/decryption operations with byte counts
@@ -43,6 +46,7 @@ Version 2.0.0 represents a major quality improvement with comprehensive error ha
 - **Error Diagnostics Logging**: Full stack traces and context for failures
 
 #### Testing
+
 - **Enhanced Test Coverage**: 71 comprehensive tests (up from 56)
 - **15 New Error Handling Tests**: Specifically for error handling paths and edge cases
 - **100% Pass Rate**: All tests passing with 2.5s execution time
@@ -76,11 +80,13 @@ Version 2.0.0 represents a major quality improvement with comprehensive error ha
 ### 🔧 Technical Details
 
 #### Dependencies
+
 - Added: `cryptography` library for encryption operations
 - Maintained: `typer` for CLI, `pyyaml` for configuration
 - Python: Requires 3.10 or newer
 
 #### Performance
+
 - Minimal performance impact: <3% overhead from enhanced logging and validation
 - Faster installation: No need to compile or install system packages
 
@@ -100,6 +106,7 @@ vaulttool
 ```
 
 **What You'll Notice:**
+
 - More helpful error messages when things go wrong
 - Better logging output for debugging
 - Faster issue resolution due to improved diagnostics
@@ -114,4 +121,3 @@ vaulttool
 ## [1.x.x] - Previous Versions
 
 Previous versions used external OpenSSL binaries for encryption operations. See git history for details.
-

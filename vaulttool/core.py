@@ -92,6 +92,7 @@ class VaultTool:
         self.key_file = options.get("key_file")
         self.algorithm = options.get("algorithm", "aes-256-cbc")
         self.openssl_path = options.get("openssl_path", "openssl")
+        self.use_suffix_fallback = options.get("use_suffix_fallback", True)  # Default: enabled for flexible vault discovery
         self.include_directories = config.get("include_directories", ["." ])
         self.exclude_directories = set(config.get("exclude_directories", []))
         self.include_patterns = config.get("include_patterns", [])
@@ -171,38 +172,51 @@ class VaultTool:
     def source_filename(vault_path: str, suffix: str) -> str:
         """Convert a vault file path to its corresponding source file path.
         
+        Removes the vault suffix from the file path to determine the original source file.
+        
         Args:
             vault_path: Path to the vault file.
             suffix: The vault file suffix to remove.
             
         Returns:
-            The source file path with the suffix removed. If the path doesn't
-            end with the suffix, returns the original path unchanged.
+            The source file path with the suffix removed.
+            If the path doesn't end with the suffix, returns the original path unchanged.
             
         Example:
             >>> VaultTool.source_filename("config.env.vault", ".vault")
             "config.env"
+            >>> VaultTool.source_filename("config.env.secret.vault", ".secret.vault")
+            "config.env"
         """
-        if vault_path.endswith(suffix):
-            return vault_path[: -len(suffix)]
-        return vault_path  # Not a vault file; return as is
+        if not vault_path.endswith(suffix):
+            return vault_path  # Not a vault file; return as is
+        
+        # Remove the suffix
+        return vault_path[:-len(suffix)]
 
-    @staticmethod
-    def vault_filename(source_path: str, suffix: str) -> str:
+    def vault_filename(self, source_path: str, suffix: str | None = None) -> str:
         """Convert a source file path to its corresponding vault file path.
+        
+        Creates a vault filename by appending the configured suffix to the source path.
         
         Args:
             source_path: Path to the source file.
-            suffix: The vault file suffix to append.
+            suffix: The vault file suffix to append. If None, uses self.suffix.
             
         Returns:
-            The vault file path with the suffix appended.
+            The vault file path with suffix appended.
             
         Example:
-            >>> VaultTool.vault_filename("config.env", ".vault")
+            >>> vt.vault_filename("config.env")  # suffix=".vault"
             "config.env.vault"
+            >>> vt.vault_filename("config.env")  # suffix=".secret.vault"
+            "config.env.secret.vault"
         """
-        return source_path + suffix
+        if suffix is None:
+            suffix = self.suffix
+        
+        # Simple suffix appending
+        return f"{source_path}{suffix}"
 
     def encrypt_file(self, source_path: str, encrypted_path: str):
         """Encrypt a single file using AES-256-CBC with derived encryption key.
@@ -409,14 +423,49 @@ class VaultTool:
         """Generator for all vault files matching the configured suffix.
         
         Recursively searches the include directories for files ending with
-        the configured vault suffix.
+        the configured vault suffix. When use_suffix_fallback is enabled and
+        a custom suffix is used (not '.vault'), also searches for '.vault'
+        files as fallbacks.
 
         Yields:
-            Path: The path to each vault file found.
+            Path: The path to each vault file found. When use_suffix_fallback=True
+                  and custom suffix is set, yields custom suffix files preferentially,
+                  with '.vault' files as fallback only if custom suffix doesn't exist
+                  for that source file.
         """
-        for dir in self.include_directories:
-            for vault_file in Path(dir).rglob(f"*{self.suffix}"):
+        if self.use_suffix_fallback and self.suffix != ".vault":
+            # Suffix fallback enabled with custom suffix
+            # Group by source file and prefer custom suffix over .vault fallback
+            vault_files_by_source = {}
+            
+            # Collect all vault files (both custom suffix and .vault)
+            for dir in self.include_directories:
+                # Find files with custom suffix
+                for vault_file in Path(dir).rglob(f"*{self.suffix}"):
+                    source = self.source_filename(str(vault_file), self.suffix)
+                    vault_files_by_source[source] = vault_file
+                
+                # Find files with .vault suffix as fallback
+                # IMPORTANT: Only search for .vault if it's different from custom suffix
+                # to avoid finding custom suffix files twice (e.g., .secret.vault ends with .vault)
+                for vault_file in Path(dir).rglob("*.vault"):
+                    # Skip if this file matches the custom suffix pattern
+                    if str(vault_file).endswith(self.suffix):
+                        continue
+                    
+                    source = self.source_filename(str(vault_file), ".vault")
+                    # Only use .vault as fallback if custom suffix doesn't exist
+                    if source not in vault_files_by_source:
+                        vault_files_by_source[source] = vault_file
+            
+            # Yield preferred vault files
+            for vault_file in vault_files_by_source.values():
                 yield vault_file
+        else:
+            # Traditional behavior: yield all vault files with configured suffix
+            for dir in self.include_directories:
+                for vault_file in Path(dir).rglob(f"*{self.suffix}"):
+                    yield vault_file
 
     def iter_missing_sources(self):
         """Generator for source files that are missing but have corresponding vault files.
@@ -481,7 +530,19 @@ class VaultTool:
         
         for vault_file in vault_files:
             total += 1
-            source_file = Path(self.source_filename(str(vault_file), self.suffix))
+            # Determine which suffix this vault file uses
+            # When fallback is enabled, files might have different suffixes
+            if str(vault_file).endswith(self.suffix):
+                vault_suffix = self.suffix
+            elif self.use_suffix_fallback and str(vault_file).endswith(".vault"):
+                vault_suffix = ".vault"
+            else:
+                # Unknown suffix, skip
+                logger.warning(f"Vault file {vault_file} doesn't match any known suffix pattern")
+                skipped += 1
+                continue
+            
+            source_file = Path(self.source_filename(str(vault_file), vault_suffix))
             
             if source_file.exists() and not force:
                 logger.debug(f"Skipping existing source file: {source_file}")
@@ -639,7 +700,8 @@ class VaultTool:
         
         for source_file in source_files:
             total += 1
-            vault_file = Path(self.vault_filename(str(source_file), self.suffix))
+            # Determine vault filename using configured suffix
+            vault_file = Path(self.vault_filename(str(source_file)))
             
             try:
                 # Compute HMAC of current source file
@@ -756,7 +818,9 @@ class VaultTool:
         """Delete all vault files matching the configured suffix.
         
         Permanently removes all vault files found in the configured include
-        directories. This operation cannot be undone.
+        directories. When suffix fallback is enabled, this removes BOTH custom
+        suffix vault files AND .vault fallback files to ensure complete cleanup.
+        This operation cannot be undone.
         
         Returns:
             Dict with keys: 'total', 'removed', 'failed', 'errors'
@@ -778,10 +842,32 @@ class VaultTool:
         failed = 0
         errors = []
         
-        vault_files = list(self.iter_vault_files())
-        logger.info(f"Found {len(vault_files)} vault files to remove")
+        # Collect all vault files to remove (including both custom suffix and fallback .vault files)
+        vault_files_to_remove = set()
         
-        for vault_file in vault_files:
+        if self.use_suffix_fallback and self.suffix != ".vault":
+            # When suffix fallback is enabled, remove BOTH custom suffix and .vault files
+            logger.info(f"Collecting vault files with custom suffix '{self.suffix}' and fallback '.vault' files")
+            for dir in self.include_directories:
+                # Find files with custom suffix
+                for vault_file in Path(dir).rglob(f"*{self.suffix}"):
+                    vault_files_to_remove.add(vault_file)
+                
+                # Find files with .vault suffix (fallback files)
+                for vault_file in Path(dir).rglob("*.vault"):
+                    # Skip if this file matches the custom suffix pattern (avoid duplicates)
+                    if not str(vault_file).endswith(self.suffix):
+                        vault_files_to_remove.add(vault_file)
+        else:
+            # Traditional behavior: collect all vault files with configured suffix
+            logger.info(f"Collecting vault files with suffix '{self.suffix}'")
+            for dir in self.include_directories:
+                for vault_file in Path(dir).rglob(f"*{self.suffix}"):
+                    vault_files_to_remove.add(vault_file)
+        
+        logger.info(f"Found {len(vault_files_to_remove)} vault files to remove")
+        
+        for vault_file in vault_files_to_remove:
             total += 1
             try:
                 vault_file.unlink()
