@@ -4,6 +4,8 @@
 
 ![License: Apache-2](https://img.shields.io/badge/License-Apache%202-blue.svg)
 ![Python: 3.10–3.13](https://img.shields.io/badge/python-3.10--3.13-blue.svg)
+![CI](https://github.com/jifox/vaulttool/workflows/CI/badge.svg)
+[![codecov](https://codecov.io/gh/jifox/vaulttool/branch/main/graph/badge.svg)](https://codecov.io/gh/jifox/vaulttool)
 
 A simple tool that allows you to automatically encrypt your secrets and configuration files so that they can be safely stored in your version control system.
 

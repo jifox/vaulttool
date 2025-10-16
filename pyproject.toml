@@ -42,6 +42,7 @@ vaulttool = "vaulttool.cli:app"
 ruff = "*"
 pre-commit = "*"
 pytest = "^8.4.2"
+pytest-cov = "*"
 
 [tool.ruff]
 line-length = 120
