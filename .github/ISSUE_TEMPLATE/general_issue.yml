@@ -1,0 +1,98 @@
+name: General Issue
+description: Report a general issue, question, or discussion topic
+title: "[General]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for opening an issue! Use this template for general questions, discussions, or issues that don't fit the bug or feature request categories.
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What type of issue is this?
+      options:
+        - Question / Help Needed
+        - Documentation Issue
+        - Discussion / Suggestion
+        - Security Concern
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe your issue, question, or topic
+      placeholder: I have a question about...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide any relevant context, background, or examples
+      placeholder: I'm trying to...
+
+  - type: input
+    id: vaulttool-version
+    attributes:
+      label: VaultTool Version (if applicable)
+      description: What version of VaultTool are you using?
+      placeholder: "2.0.1 (run 'vaulttool version' to check)"
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python Version (if applicable)
+      description: What version of Python are you using?
+      placeholder: "3.10.12 (run 'python --version' to check)"
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System (if applicable)
+      description: What OS are you running?
+      placeholder: "Ubuntu 22.04, macOS 14, Windows 11, etc."
+
+  - type: textarea
+    id: related-docs
+    attributes:
+      label: Related Documentation
+      description: Have you checked the documentation? If so, what did you find?
+      placeholder: |
+        I checked:
+        - README.md
+        - docs/GENERATE_KEY_FEATURE.md
+        But I'm still unclear about...
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution or Answer (if you have one)
+      description: If you have ideas for addressing this issue, please share them
+      placeholder: I think it would help if...
+
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional Information
+      description: Any other information that might be helpful
+      placeholder: Also relevant...
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues to ensure this hasn't been asked/reported
+          required: true
+        - label: I have reviewed the documentation
+          required: false
+        - label: This is not a bug report or feature request (use those templates instead)
+          required: true
