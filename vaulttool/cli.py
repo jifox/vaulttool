@@ -1,4 +1,3 @@
-
 """Command-line interface for VaultTool.
 
 This module provides the command-line interface for VaultTool using Typer.
@@ -25,29 +24,34 @@ from . import setup_logging, get_logger
 from .core import VaultTool
 
 # Create app with proper help text
+# Note: Using triple-quoted string with \b to preserve formatting
 app = typer.Typer(
     help="""Secure file encryption for secrets and configuration files.
 
 Encrypts sensitive files using AES-256-CBC and manages their encrypted counterparts.
 
+\b
 Key Options:
   encrypt --force      Re-encrypt all files (ignores checksums)
   refresh --no-force   Only restore missing files
   generate-key         Create new encryption key with backup
 
+\b
 Config: .vaulttool.yml (current dir) or ~/.vaulttool/.vaulttool.yml
 
+\b
 Examples:
   vaulttool gen-vaulttool > .vaulttool.yml    # Generate config file
   vaulttool generate-key                      # Create encryption key
-  vaulttool encrypt          # Encrypt changed files only
-  vaulttool refresh          # Restore all source files
-  vaulttool remove           # Delete all vault files
-
-  vaulttool generate-key --rekey    # Replace key and re-encrypt all vaults
-  vaulttool --verbose encrypt       # Show detailed debug logs
-  vaulttool --quiet refresh         # Show errors only
-"""
+  vaulttool encrypt                           # Encrypt changed files only
+  vaulttool refresh                           # Restore all source files
+  vaulttool remove                            # Delete all vault files
+\b
+  vaulttool generate-key --rekey              # Replace key and re-encrypt all vaults
+  vaulttool --verbose encrypt                 # Show detailed debug logs
+  vaulttool --quiet refresh                   # Show errors only
+""",
+    pretty_exceptions_enable=False,
 )
 
 # Global options for logging control
@@ -150,35 +154,25 @@ def generate_key_cmd(
 ):
     """Generate a new encryption key with backup and rekey options.
 
-    This command helps you manage encryption keys safely:
+\b
+This command helps you manage encryption keys safely:
+  1. If key file doesn't exist: Creates a new key
+  2. If key file exists: Offers to backup and replace with new key
+  3. If --rekey specified: Re-encrypts all vaults with the new key
 
-    1. If key file doesn't exist: Creates a new key
-    2. If key file exists: Offers to backup and replace with new key
-    3. If --rekey specified: Re-encrypts all vaults with the new key
+\b
+The rekey process:
+  1. Restores plaintext files from existing vaults
+  2. Removes old vault files
+  3. Backs up the old key
+  4. Writes the new key
+  5. Encrypts files with the new key
 
-    The rekey process:
-      1. Restores plaintext files from existing vaults
-      2. Removes old vault files
-      3. Backs up the old key
-      4. Writes the new key
-      5. Encrypts files with the new key
-
-    Args:
-        key_file: Path to key file (overrides config)
-        rekey: Re-encrypt all vault files with the new key
-        force: Skip confirmation prompts
-        verbose: Enable verbose debug logging
-        quiet: Show only errors
-
-    Example:
-        # Generate new key in default location
-        vaulttool generate-key
-
-        # Generate key with rekey
-        vaulttool generate-key --rekey
-
-        # Generate key in custom location
-        vaulttool generate-key --key-file ~/.vaulttool/vault.key
+\b
+Examples:
+  vaulttool generate-key                              # Generate new key
+  vaulttool generate-key --rekey                      # Generate and rekey
+  vaulttool generate-key --key-file ~/.vault/key      # Custom location
     """
     logger = _setup_cli_logging(verbose, quiet)
 
@@ -412,12 +406,12 @@ def version_cmd(
 ):
     """Display VaultTool version information.
 
-    Shows the currently installed version of VaultTool along with
-    basic package information.
+\b
+Shows the currently installed version of VaultTool.
 
-    Args:
-        verbose: Enable verbose debug logging
-        quiet: Show only errors
+\b
+Example:
+  vaulttool version
     """
     _setup_cli_logging(verbose, quiet)
     pkg_version = _get_version()
@@ -428,12 +422,14 @@ def version_cmd(
 def gen_config():
     """Generate an example .vaulttool.yml configuration file.
 
-    Displays a formatted example configuration file that can be saved as
-    .vaulttool.yml to configure VaultTool for your project. The configuration
-    includes all available options with comments explaining their purpose.
+\b
+Displays a formatted example configuration file that can be saved as
+.vaulttool.yml to configure VaultTool for your project. The configuration
+includes all available options with comments explaining their purpose.
 
-    Example:
-        vaulttool gen-vaulttool > .vaulttool.yml
+\b
+Example:
+  vaulttool gen-vaulttool > .vaulttool.yml
     """
     example_config = """---
 # .vaulttool.yml - VaultTool Configuration File
@@ -496,15 +492,13 @@ def remove(
 ):
     """Remove all vault files matching the configured suffix.
 
-    This command will permanently delete all .vault files found in the configured
-    include directories that match the suffix pattern. This operation cannot be undone.
+\b
+This command will permanently delete all .vault files found in the configured
+include directories that match the suffix pattern. This operation cannot be undone.
 
-    Args:
-        verbose: Enable verbose debug logging
-        quiet: Show only errors
-
-    Raises:
-        Exit code 1 if any operations failed.
+\b
+Example:
+  vaulttool remove
     """
     _setup_cli_logging(verbose, quiet)
 
@@ -537,18 +531,22 @@ def encrypt(
 ):
     """Encrypt files as configured.
 
-    Encrypts all source files matching the configured patterns into vault files.
-    By default, only encrypts files that have changed (different HMAC) or
-    don't have existing vault files.
+\b
+Encrypts all source files matching the configured patterns into vault files.
+By default, only encrypts files that have changed (different HMAC) or
+don't have existing vault files.
 
-    Args:
-        force: If True, re-encrypt and overwrite existing .vault files even if
-               the source file hasn't changed.
-        verbose: Enable verbose debug logging
-        quiet: Show only errors
+\b
+Options:
+  --force        Re-encrypt all files, overwriting existing .vault files
+  --verbose      Show detailed debug information
+  --quiet        Show only errors
 
-    Raises:
-        Exit code 1 if any operations failed.
+\b
+Examples:
+  vaulttool encrypt                # Encrypt changed files only
+  vaulttool encrypt --force        # Re-encrypt all files
+  vaulttool --verbose encrypt      # Show debug output
     """
     _setup_cli_logging(verbose, quiet)
 
@@ -587,17 +585,22 @@ def refresh(
 ):
     """Restore/refresh plaintext files from .vault files.
 
-    Decrypts vault files to restore their corresponding source files.
-    By default, overwrites existing source files (force=True).
+\b
+Decrypts vault files to restore their corresponding source files.
+By default, overwrites existing source files (force=True).
 
-    Args:
-        force: If True (default), overwrite existing plaintext files.
-               If False, only restore missing files.
-        verbose: Enable verbose debug logging
-        quiet: Show only errors
+\b
+Options:
+  --force        Overwrite existing plaintext files (default)
+  --no-force     Only restore missing files
+  --verbose      Show detailed debug information
+  --quiet        Show only errors
 
-    Raises:
-        Exit code 1 if any operations failed.
+\b
+Examples:
+  vaulttool refresh                # Restore all files (overwrite)
+  vaulttool refresh --no-force     # Restore only missing files
+  vaulttool --verbose refresh      # Show debug output
     """
     _setup_cli_logging(verbose, quiet)
 
@@ -630,15 +633,13 @@ def check_ignore(
 ):
     """Check that all plaintext files are ignored by Git.
 
-    Validates that all source files matching the configured patterns are
-    properly added to .gitignore to prevent accidental commits of sensitive data.
+\b
+Validates that all source files matching the configured patterns are
+properly added to .gitignore to prevent accidental commits of sensitive data.
 
-    Args:
-        verbose: Enable verbose debug logging
-        quiet: Show only errors
-
-    Returns:
-        Exit code 0 if operation completed.
+\b
+Example:
+  vaulttool check-ignore
     """
     _setup_cli_logging(verbose, quiet)
 
