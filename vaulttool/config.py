@@ -7,7 +7,7 @@ overrides, and validation of required configuration keys.
 Environment Variable Support:
     Configuration can be overridden using environment variables with the
     VAULTTOOL_ prefix. For list values, use comma-separated strings.
-    
+
     Examples:
         VAULTTOOL_OPTIONS_KEY_FILE=/path/to/key
         VAULTTOOL_OPTIONS_USE_SUFFIX_FALLBACK=true
@@ -24,13 +24,13 @@ import yaml
 
 def _parse_bool(value: str) -> bool:
     """Parse boolean value from string.
-    
+
     Args:
         value: String value to parse (case-insensitive)
-        
+
     Returns:
         Boolean value
-        
+
     Example:
         >>> _parse_bool("true")
         True
@@ -44,13 +44,13 @@ def _parse_bool(value: str) -> bool:
 
 def _parse_list(value: str) -> List[str]:
     """Parse comma-separated list from string.
-    
+
     Args:
         value: Comma-separated string
-        
+
     Returns:
         List of stripped strings
-        
+
     Example:
         >>> _parse_list("*.env, *.ini, *.secret")
         ['*.env', '*.ini', '*.secret']
@@ -62,23 +62,23 @@ def _parse_list(value: str) -> List[str]:
 
 def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
     """Apply environment variable overrides to configuration.
-    
+
     Environment variables with VAULTTOOL_ prefix override config values.
     Nested keys use double underscores, e.g., VAULTTOOL_OPTIONS_KEY_FILE.
     Lists use comma-separated values.
-    
+
     Args:
         config: Base configuration dictionary
-        
+
     Returns:
         Configuration with environment overrides applied
-        
+
     Example:
         export VAULTTOOL_OPTIONS_KEY_FILE=/custom/key
         export VAULTTOOL_INCLUDE_PATTERNS="*.env,*.secret"
     """
     env_prefix = "VAULTTOOL_"
-    
+
     # Map of config keys to environment variable names
     env_mappings = {
         # Top-level lists
@@ -86,7 +86,7 @@ def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
         "exclude_directories": f"{env_prefix}EXCLUDE_DIRECTORIES",
         "include_patterns": f"{env_prefix}INCLUDE_PATTERNS",
         "exclude_patterns": f"{env_prefix}EXCLUDE_PATTERNS",
-        
+
         # Options (nested)
         "options.suffix": f"{env_prefix}OPTIONS_SUFFIX",
         "options.key_file": f"{env_prefix}OPTIONS_KEY_FILE",
@@ -94,23 +94,23 @@ def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
         "options.openssl_path": f"{env_prefix}OPTIONS_OPENSSL_PATH",
         "options.use_suffix_fallback": f"{env_prefix}OPTIONS_USE_SUFFIX_FALLBACK",
     }
-    
+
     for config_key, env_var in env_mappings.items():
         env_value = os.environ.get(env_var)
         if env_value is None:
             continue
-            
+
         # Parse the configuration key path
         if "." in config_key:
             # Nested key (e.g., "options.key_file")
             parent_key, child_key = config_key.split(".", 1)
-            
+
             # Ensure parent exists
             if parent_key not in config:
                 config[parent_key] = {}
             if not isinstance(config[parent_key], dict):
                 config[parent_key] = {}
-            
+
             # Determine value type and parse
             if child_key in ("use_suffix_fallback",):
                 # Boolean values
@@ -126,7 +126,7 @@ def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 # String values
                 config[config_key] = env_value
-    
+
     return config
 
 
@@ -135,11 +135,11 @@ def load_config(path: str = ".vaulttool.yml") -> Dict[str, Any]:
 
     Attempts to load configuration from the specified path. If the file doesn't
     exist, searches for configuration files in standard locations:
-    
+
     1. Current directory: .vaulttool.yml
-    2. User config: ~/.vaulttool/.vaulttool.yml  
+    2. User config: ~/.vaulttool/.vaulttool.yml
     3. System config: /etc/vaulttool/config.yml
-    
+
     After loading, applies environment variable overrides with VAULTTOOL_ prefix.
     Environment variables override file configuration.
 
@@ -148,18 +148,18 @@ def load_config(path: str = ".vaulttool.yml") -> Dict[str, Any]:
 
     Returns:
         Dictionary containing the parsed and validated configuration.
-        
+
     Raises:
         FileNotFoundError: If no configuration file is found in any location.
-        ValueError: If the configuration file is invalid, malformed, or 
+        ValueError: If the configuration file is invalid, malformed, or
                    missing required keys.
         yaml.YAMLError: If the YAML file cannot be parsed.
-        
+
     Example:
         >>> config = load_config()
         >>> print(config['options']['algorithm'])
         'aes-256-cbc'
-        
+
         >>> # With environment override:
         >>> os.environ['VAULTTOOL_OPTIONS_KEY_FILE'] = '/custom/key'
         >>> config = load_config()
@@ -192,7 +192,7 @@ def load_config(path: str = ".vaulttool.yml") -> Dict[str, Any]:
     # Ensure the config has the required keys
     if cfg is None or not isinstance(cfg, dict):
         raise ValueError("Invalid configuration format. Expected a dictionary.")
-    
+
     # Apply environment variable overrides
     cfg = _apply_env_overrides(cfg)
 
@@ -225,7 +225,7 @@ def load_config(path: str = ".vaulttool.yml") -> Dict[str, Any]:
     options = cfg.get("options")
     if not isinstance(options, dict):
         raise ValueError("'options' must be a mapping/dictionary.")
-    
+
     # Validate key_file is specified
     if "key_file" not in options:
         raise ValueError("'options.key_file' is required")
@@ -240,20 +240,20 @@ def load_config(path: str = ".vaulttool.yml") -> Dict[str, Any]:
         # Check if suffix contains a dot at all
         if "." not in suffix:
             raise ValueError("Suffix must contain a dot (e.g., .vault, .secret.vault)")
-        
+
         # If suffix comes from environment variable, enforce .vault ending
         # Check if VAULTTOOL_OPTIONS_SUFFIX is set
         if os.environ.get("VAULTTOOL_OPTIONS_SUFFIX"):
             if not suffix.endswith(".vault"):
                 raise ValueError(f"'options.suffix' from environment must end with '.vault', got: {suffix}")
-        
+
         if not suffix.startswith("."):
             # If a dot is present but doesn't start with dot, ensure it starts with underscore
             if not suffix.startswith("_"):
                 # Prepend underscore
                 new_suffix = f"_{suffix}"
                 options["suffix"] = new_suffix
-    
+
     # Ensure exclude_patterns contains the suffix pattern
     exclude_patterns = cfg.get("exclude_patterns", [])
     suffix_pattern = f"*{suffix}" if suffix else "*.vault"

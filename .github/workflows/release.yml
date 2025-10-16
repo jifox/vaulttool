@@ -1,0 +1,106 @@
+name: Release to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on tags starting with 'v' (e.g., v2.0.0, v1.2.3)
+
+jobs:
+  release:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    # Uncomment if using environment secrets (Option B)
+    # environment: pypi-production
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          # Remove 'v' prefix from tag to get version
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION"
+      
+      - name: Verify version matches pyproject.toml
+        run: |
+          PYPROJECT_VERSION=$(poetry version -s)
+          TAG_VERSION="${{ steps.get_version.outputs.version }}"
+          echo "Tag version: $TAG_VERSION"
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          
+          if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "❌ Error: Tag version ($TAG_VERSION) does not match pyproject.toml version ($PYPROJECT_VERSION)"
+            exit 1
+          fi
+          echo "✅ Version match confirmed"
+      
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      
+      - name: Run tests
+        run: poetry run pytest -v
+      
+      - name: Build package
+        run: poetry build
+      
+      - name: Check build artifacts
+        run: |
+          ls -lh dist/
+          echo "Built packages:"
+          echo "- $(ls dist/*.whl)"
+          echo "- $(ls dist/*.tar.gz)"
+      
+      - name: Publish to PyPI (using repository secret)
+        env:
+          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          poetry config pypi-token.pypi $POETRY_PYPI_TOKEN_PYPI
+          poetry publish
+      
+      # Alternative: Publish using environment secret (uncomment if using Option B)
+      # - name: Publish to PyPI (using environment secret)
+      #   env:
+      #     POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
+      #   run: |
+      #     poetry config pypi-token.pypi $POETRY_PYPI_TOKEN_PYPI
+      #     poetry publish
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+          body: |
+            ## VaultTool ${{ steps.get_version.outputs.version }}
+            
+            See [CHANGELOG.md](https://github.com/jifox/vaulttool/blob/main/CHANGELOG.md) for details.
+            
+            ### Installation
+            
+            ```bash
+            pip install vaulttool==${{ steps.get_version.outputs.version }}
+            ```
+            
+            ### PyPI
+            
+            https://pypi.org/project/vaulttool/${{ steps.get_version.outputs.version }}/
+          draft: false
+          prerelease: ${{ contains(steps.get_version.outputs.version, 'rc') || contains(steps.get_version.outputs.version, 'beta') || contains(steps.get_version.outputs.version, 'alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
