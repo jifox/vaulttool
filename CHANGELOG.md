@@ -7,18 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0] - 2025-10-15
 
-### 🎉 Major Release - Quality & Reliability Improvements
+### Major Release - Quality & Reliability Improvements
 
 Version 2.0.0 represents a major quality improvement with comprehensive error handling, enhanced validation, and simplified installation. This release makes VaultTool more robust, debuggable, and user-friendly.
 
-### ⚠️ Breaking Changes
+### Breaking Changes
 
 - **Removed OpenSSL Dependency**: VaultTool now uses Python's `cryptography` library directly instead of calling external OpenSSL binaries
   - **Impact**: The `openssl_path` configuration option is no longer used and will be ignored if present
   - **Benefit**: Simplified installation with no system dependencies required
   - **Migration**: No action needed - existing configurations continue to work, just remove the unused `openssl_path` option
 
-### ✨ Added
+### Added
 
 #### Security & Reliability
 
@@ -52,7 +52,7 @@ Version 2.0.0 represents a major quality improvement with comprehensive error ha
 - **100% Pass Rate**: All tests passing with 2.5s execution time
 - **Zero Regressions**: All original tests still passing
 
-### 🔄 Changed
+### Changed
 
 - **Encryption Backend**: Migrated from OpenSSL CLI to Python `cryptography` library
   - Same AES-256-CBC encryption with HMAC-SHA256 authentication
@@ -61,14 +61,14 @@ Version 2.0.0 represents a major quality improvement with comprehensive error ha
 - **Error Messages**: All error messages enhanced with specific details and actionable guidance
 - **Configuration Validation**: More strict validation with detailed error reporting
 
-### 🐛 Fixed
+### Fixed
 
 - **Key Derivation**: Enhanced error context in HKDF operations
 - **Task Error Aggregation**: TaskResult now includes file paths in error messages for easier debugging
 - **Padding Validation**: Better detection and reporting of corrupted encrypted data
 - **Path Resolution**: Improved error messages when path validation fails
 
-### 📚 Documentation
+### Documentation
 
 - **README**: Comprehensive "What's New in v2.0.0" section added
 - **Installation Guide**: Simplified with removal of OpenSSL requirements
@@ -77,7 +77,7 @@ Version 2.0.0 represents a major quality improvement with comprehensive error ha
 - **Troubleshooting**: Updated with v2.0.0-specific guidance
 - **Configuration Reference**: Updated to reflect removed `openssl_path` option
 
-### 🔧 Technical Details
+### Technical Details
 
 #### Dependencies
 
@@ -90,7 +90,7 @@ Version 2.0.0 represents a major quality improvement with comprehensive error ha
 - Minimal performance impact: <3% overhead from enhanced logging and validation
 - Faster installation: No need to compile or install system packages
 
-### 📦 Upgrade Instructions
+### Upgrade Instructions
 
 **Completely Backward Compatible** - Drop-in replacement for v1.x:
 
@@ -112,7 +112,7 @@ vaulttool
 - Faster issue resolution due to improved diagnostics
 - Simpler installation on new systems
 
-### 🙏 Contributors
+### Contributors
 
 - Josef Fuchs - Lead Developer
 
