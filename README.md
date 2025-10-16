@@ -608,6 +608,7 @@ vaulttool remove [OPTIONS]
 This will search the configured directories and delete all matching vault files.
 
 **Note:** When `use_suffix_fallback` is enabled (default) and a custom suffix is configured, this command removes BOTH:
+
 - Vault files with the custom suffix (e.g., `secret.env.prod.vault`)
 - Fallback `.vault` files (e.g., `secret.env.vault`)
 
