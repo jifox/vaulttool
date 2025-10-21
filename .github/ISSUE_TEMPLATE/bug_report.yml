@@ -1,0 +1,118 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in VaultTool
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the information below to help us diagnose and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the behavior
+      placeholder: |
+        1. Run command '...'
+        2. Configure '...'
+        3. Execute '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+      placeholder: The command should...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened
+      placeholder: Instead, the command...
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error Output
+      description: Please copy and paste any relevant error output. This will be automatically formatted into code.
+      render: shell
+      placeholder: |
+        $ vaulttool encrypt
+        ERROR: ...
+
+  - type: input
+    id: vaulttool-version
+    attributes:
+      label: VaultTool Version
+      description: What version of VaultTool are you running?
+      placeholder: "2.0.1 (run 'vaulttool version' to check)"
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python Version
+      description: What version of Python are you using?
+      placeholder: "3.10.12 (run 'python --version' to check)"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      description: What OS are you running?
+      placeholder: "Ubuntu 22.04, macOS 14, Windows 11, etc."
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration File
+      description: Please share your `.vaulttool.yml` configuration (remove sensitive paths if needed)
+      render: yaml
+      placeholder: |
+        vaulttool:
+          include_directories:
+            - "."
+          ...
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here (screenshots, logs, workarounds, etc.)
+      placeholder: This started happening after...
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have tested with the latest version of VaultTool
+          required: false
+        - label: I have included all relevant information above
+          required: true
