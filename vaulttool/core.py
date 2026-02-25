@@ -218,6 +218,73 @@ class VaultTool:
         # Simple suffix appending
         return f"{source_path}{suffix}"
 
+    def infer_vault_suffix(self, vault_path: str) -> str | None:
+        """Infer the actual vault suffix from a vault file path.
+
+        When fallback is enabled, vault files might have different suffixes than the current
+        configured suffix. This method attempts to determine the actual suffix by checking
+        if the file ends with ".vault" but not with the current suffix.
+
+        Strategy: Since all suffixes must end with ".vault", when a file doesn't match the
+        current suffix but ends with ".vault", we infer the suffix while accounting for
+        common file extensions (.env, .ini, .yaml, etc.).
+
+        Args:
+            vault_path: Path to the vault file to analyze.
+
+        Returns:
+            The inferred suffix (e.g., ".prod.vault", "_n3test.vault") or None if unable to infer.
+
+        Example:
+            >>> vt.infer_vault_suffix("development/creds.env.prod.vault")
+            ".prod.vault"
+        """
+        if not isinstance(vault_path, str):
+            vault_path = str(vault_path)
+
+        # If the file already matches the current suffix, return it
+        if vault_path.endswith(self.suffix):
+            return self.suffix
+
+        # If fallback is enabled and file ends with .vault, we need to infer the suffix
+        if self.use_suffix_fallback and vault_path.endswith(".vault"):
+            # Remove ".vault" to get the base filename
+            base = vault_path[:-6]  # Remove ".vault"
+            
+            # Common file extensions that are NOT part of the vault suffix
+            # These are file extensions that come BEFORE the vault suffix
+            COMMON_EXTENSIONS = {
+                '.env', '.ini', '.yaml', '.yml', '.json', '.conf', '.cfg',
+                '.config', '.secret', '.txt', '.log', '.properties', '.cnf'
+            }
+            
+            # Check if the base ends with a common file extension
+            for ext in COMMON_EXTENSIONS:
+                if base.endswith(ext):
+                    # The file extension is part of the filename, not the vault suffix
+                    # So the vault suffix is just ".vault"
+                    logger.debug(f"Detected common file extension {ext!r} in {vault_path!r}, using .vault as suffix")
+                    return ".vault"
+            
+            # No common extension found, so try to find a custom suffix
+            # Look for the last dot or underscore that could mark the start of a custom suffix
+            last_dot_idx = base.rfind(".")
+            last_underscore_idx = base.rfind("_")
+            
+            # Take the last occurrence of either dot or underscore
+            split_idx = max(last_dot_idx, last_underscore_idx)
+            
+            if split_idx >= 0:
+                # Found a dot or underscore, so custom suffix is from that position to ".vault"
+                inferred_suffix = base[split_idx:] + ".vault"
+                logger.debug(f"Inferred vault suffix {inferred_suffix!r} for file {vault_path!r}")
+                return inferred_suffix
+            else:
+                # No dot or underscore found in base, so suffix is just ".vault"
+                return ".vault"
+
+        return None
+
     def encrypt_file(self, source_path: str, encrypted_path: str):
         """Encrypt a single file using AES-256-CBC with derived encryption key.
 
@@ -453,8 +520,14 @@ class VaultTool:
                     if str(vault_file).endswith(self.suffix):
                         continue
 
-                    source = self.source_filename(str(vault_file), ".vault")
-                    # Only use .vault as fallback if custom suffix doesn't exist
+                    # Infer the actual suffix instead of assuming ".vault"
+                    inferred_suffix = self.infer_vault_suffix(str(vault_file))
+                    if inferred_suffix is None:
+                        # Fallback to ".vault" if unable to infer
+                        inferred_suffix = ".vault"
+                    
+                    source = self.source_filename(str(vault_file), inferred_suffix)
+                    # Only use fallback if custom suffix doesn't exist
                     if source not in vault_files_by_source:
                         vault_files_by_source[source] = vault_file
 
@@ -535,7 +608,13 @@ class VaultTool:
             if str(vault_file).endswith(self.suffix):
                 vault_suffix = self.suffix
             elif self.use_suffix_fallback and str(vault_file).endswith(".vault"):
-                vault_suffix = ".vault"
+                # Use inferred suffix instead of assuming ".vault"
+                vault_suffix = self.infer_vault_suffix(str(vault_file))
+                if vault_suffix is None:
+                    logger.warning(f"Failed to infer vault suffix for {vault_file}")
+                    skipped += 1
+                    continue
+                logger.debug(f"Using inferred suffix {vault_suffix!r} for {vault_file}")
             else:
                 # Unknown suffix, skip
                 logger.warning(f"Vault file {vault_file} doesn't match any known suffix pattern")
