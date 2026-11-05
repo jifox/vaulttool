@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'  # Trigger on tags starting with 'v' (e.g., v2.0.0, v1.2.3)
 
+permissions:
+  contents: write  # Required to create the GitHub Release with attached artifacts
+
 jobs:
   release:
     name: Build and publish to PyPI
@@ -65,7 +68,21 @@ jobs:
           echo "- $(ls dist/*.whl)"
           echo "- $(ls dist/*.tar.gz)"
       
+      - name: Check whether this version already exists on PyPI
+        id: pypi_check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://pypi.org/pypi/vaulttool/${{ steps.get_version.outputs.version }}/json")
+          echo "PyPI HTTP status: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Version already published - skipping upload (safe re-run)."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Publish to PyPI (using repository secret)
+        if: steps.pypi_check.outputs.exists == 'false'
         env:
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
         run: |
