@@ -74,6 +74,14 @@ HMAC_HEX_LENGTH: int = 64
 HMAC_HEX_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
+class VaultFormatError(ValueError):
+    """Raised when a vault file is structurally invalid (bad lines, bad base64)."""
+
+
+class VaultAuthError(ValueError):
+    """Raised when a vault file fails authentication (tag or digest mismatch)."""
+
+
 class VaultTool:
     """A tool for encrypting and managing sensitive files using AES-256-CBC.
 
@@ -808,12 +816,113 @@ class VaultTool:
         logger.debug("git check-ignore returned %s for %s; assuming ignored", result.returncode, path)
         return True
 
+    def _resolve_vault_suffix(self, vault_file: Path) -> Optional[str]:
+        """Return the suffix a vault file was written with.
+
+        Args:
+            vault_file: Vault file to inspect.
+
+        Returns:
+            The configured suffix, an inferred suffix, or ``None`` when the file
+            does not look like a vault file.
+        """
+        name = str(vault_file)
+        if name.endswith(self.suffix):
+            return self.suffix
+        if self.use_suffix_fallback and name.endswith(DEFAULT_SUFFIX):
+            inferred = self.infer_vault_suffix(name)
+            if inferred is not None:
+                logger.debug("Using inferred suffix %r for %s", inferred, vault_file)
+            return inferred
+        return None
+
+    def _read_vault_entry(self, vault_file: Path) -> Tuple[str, bytes]:
+        """Read and validate the two-line vault file layout.
+
+        Args:
+            vault_file: Path of the vault file.
+
+        Returns:
+            Tuple of (digest as hex string, encrypted payload bytes).
+
+        Raises:
+            VaultFormatError: If the file is malformed or not decodable.
+        """
+        logger.debug("Reading vault file: %s", vault_file)
+        with open(vault_file, "r", encoding="utf-8") as handle:
+            lines = handle.readlines()
+
+        if len(lines) < 2:
+            raise VaultFormatError("Vault file has insufficient lines (expected at least 2)")
+
+        digest = lines[0].strip().lower()
+        encoded_payload = lines[1].strip()
+
+        if not self._is_valid_hmac(digest):
+            raise VaultFormatError(f"Invalid HMAC format in {vault_file} (expected 64 hex chars)")
+        if not encoded_payload:
+            raise VaultFormatError(f"Empty encrypted content in {vault_file}")
+
+        try:
+            payload = base64.b64decode(encoded_payload, validate=True)
+        except (binascii.Error, ValueError) as e:
+            raise VaultFormatError(f"Invalid base64 encoding in {vault_file}: {e}") from e
+
+        return digest, payload
+
+    def _restore_vault_file(self, vault_file: Path, source_file: Path) -> None:
+        """Authenticate, decrypt and atomically restore a single source file.
+
+        Nothing is written unless the payload authenticates *and* the stored
+        digest matches the decrypted plaintext.
+
+        Args:
+            vault_file: Vault file to restore from.
+            source_file: Destination of the decrypted content.
+
+        Raises:
+            VaultFormatError: If the vault file is malformed.
+            VaultAuthError: If authentication or digest verification fails.
+        """
+        digest, payload = self._read_vault_entry(vault_file)
+
+        logger.debug("Decrypting %s -> %s", vault_file, source_file)
+        try:
+            plaintext = self._decrypt_payload(payload, self._path_aad(source_file))
+        except ValueError as e:
+            raise VaultAuthError(f"Decryption failed: {e}") from e
+
+        computed = compute_hmac_bytes(plaintext, self.hmac_key)
+        if not hmac.compare_digest(computed, digest):
+            logger.error("HMAC verification failed for %s", vault_file)
+            logger.debug("  Stored HMAC:   %s", digest)
+            logger.debug("  Computed HMAC: %s", computed)
+            raise VaultAuthError("HMAC verification failed")
+
+        self._write_bytes_atomically(source_file, plaintext)
+
+    @staticmethod
+    def _log_errors(errors: List[Tuple[str, str]], action: str) -> None:
+        """Log the first few per-file errors of a task.
+
+        Args:
+            errors: List of (path, message) tuples.
+            action: Verb used in the summary message (e.g. ``"encrypt"``).
+        """
+        if not errors:
+            return
+        logger.warning("Failed to %s %s files", action, len(errors))
+        for name, error in errors[:5]:
+            logger.warning("  - %s: %s", name, error)
+        if len(errors) > 5:
+            logger.warning("  ... and %s more errors", len(errors) - 5)
+
     def refresh_task(self, force: bool = True) -> Dict[str, Any]:
         """Decrypt and restore source files from their vault files.
 
         For each vault file found in the configured directories, decrypts and
         restores the corresponding source file. By default, overwrites existing
-        source files. Verifies HMAC integrity after decryption.
+        source files. Payloads are authenticated before anything is written.
 
         Args:
             force: If True, decrypt and restore source files even if they already
@@ -824,134 +933,58 @@ class VaultTool:
             where 'errors' is a list of (vault_file, error_message) tuples.
 
         Note:
-            Each vault file contains an HMAC tag on the first line and base64-encoded
-            encrypted content on subsequent lines. After decryption, the HMAC is
-            verified to ensure the decrypted content has not been tampered with.
+            Each vault file contains a digest on the first line and base64-encoded
+            authenticated content on the remaining line.
         """
-        logger.info(f"Starting refresh task (force={force})")
+        logger.info("Starting refresh task (force=%s)", force)
 
-        # Initialize counters for aggregation
-        total = 0
-        succeeded = 0
-        failed = 0
-        skipped = 0
-        errors = []
+        result: Dict[str, Any] = {"total": 0, "succeeded": 0, "failed": 0, "skipped": 0, "errors": []}
+        errors: List[Tuple[str, str]] = result["errors"]
 
         vault_files = list(self.iter_vault_files())
-        logger.info(f"Found {len(vault_files)} vault files to process")
+        logger.info("Found %s vault files to process", len(vault_files))
 
         for vault_file in vault_files:
-            total += 1
-            # Determine which suffix this vault file uses
-            # When fallback is enabled, files might have different suffixes
-            if str(vault_file).endswith(self.suffix):
-                vault_suffix = self.suffix
-            elif self.use_suffix_fallback and str(vault_file).endswith(".vault"):
-                # Use inferred suffix instead of assuming ".vault"
-                vault_suffix = self.infer_vault_suffix(str(vault_file))
-                if vault_suffix is None:
-                    logger.warning(f"Failed to infer vault suffix for {vault_file}")
-                    skipped += 1
-                    continue
-                logger.debug(f"Using inferred suffix {vault_suffix!r} for {vault_file}")
-            else:
-                # Unknown suffix, skip
-                logger.warning(f"Vault file {vault_file} doesn't match any known suffix pattern")
-                skipped += 1
+            result["total"] += 1
+
+            vault_suffix = self._resolve_vault_suffix(vault_file)
+            if vault_suffix is None:
+                logger.warning("Vault file %s doesn't match any known suffix pattern", vault_file)
+                result["skipped"] += 1
                 continue
 
             source_file = Path(self.source_filename(str(vault_file), vault_suffix))
 
             if source_file.exists() and not force:
-                logger.debug(f"Skipping existing source file: {source_file}")
-                skipped += 1
+                logger.debug("Skipping existing source file: %s", source_file)
+                result["skipped"] += 1
                 continue
 
-            # Read vault file with validation
             try:
-                logger.debug(f"Reading vault file: {vault_file}")
-                with open(vault_file, "r", encoding="utf-8") as vf:
-                    lines = vf.readlines()
-                    if len(lines) < 2:
-                        raise ValueError("Vault file has insufficient lines (expected at least 2)")
-                    stored_hmac = lines[0].strip().lower()
-                    encrypted_b64 = lines[1].strip()
-            except (IOError, OSError) as e:
-                logger.error(f"Failed to read vault file {vault_file}: {e}")
-                errors.append((str(vault_file), f"Read error: {e}"))
-                failed += 1
-                continue
-            except ValueError as e:
-                logger.warning(f"Malformed vault file {vault_file}: {e}")
+                self._restore_vault_file(vault_file, source_file)
+            except VaultFormatError as e:
+                logger.warning("Malformed vault file %s: %s", vault_file, e)
                 errors.append((str(vault_file), f"Malformed: {e}"))
-                failed += 1
+                result["failed"] += 1
                 continue
-
-            # Validate HMAC format
-            if not self._is_valid_hmac(stored_hmac):
-                logger.error(f"Invalid HMAC format in {vault_file} (expected 64 hex chars)")
-                errors.append((str(vault_file), "Invalid HMAC format"))
-                failed += 1
-                continue
-
-            # Validate and decode base64
-            if not encrypted_b64:
-                logger.error(f"Empty encrypted content in {vault_file}")
-                errors.append((str(vault_file), "Empty encrypted content"))
-                failed += 1
-                continue
-
-            try:
-                encrypted_data = base64.b64decode(encrypted_b64, validate=True)
-            except (binascii.Error, ValueError) as e:
-                logger.error(f"Invalid base64 encoding in {vault_file}: {e}")
-                errors.append((str(vault_file), f"Base64 decode error: {e}"))
-                failed += 1
-                continue
-
-            # Authenticate and decrypt in memory before touching the disk:
-            # unauthenticated plaintext must never be written.
-            try:
-                logger.debug("Decrypting %s -> %s", vault_file, source_file)
-                plaintext = self._decrypt_payload(encrypted_data, self._path_aad(source_file))
-
-                computed_hmac = compute_hmac_bytes(plaintext, self.hmac_key)
-                if not hmac.compare_digest(computed_hmac, stored_hmac):
-                    logger.error("HMAC verification failed for %s", vault_file)
-                    logger.debug("  Stored HMAC:   %s", stored_hmac)
-                    logger.debug("  Computed HMAC: %s", computed_hmac)
-                    logger.warning("File may have been tampered with - nothing was written")
-                    errors.append((str(vault_file), "HMAC verification failed"))
-                    failed += 1
-                    continue
-
-                self._write_bytes_atomically(source_file, plaintext)
-                logger.info("Successfully restored %s from %s (authenticated ✓)", source_file, vault_file)
-                succeeded += 1
-
-            except (IOError, OSError, ValueError) as e:
+            except (VaultAuthError, IOError, OSError) as e:
                 logger.error(
                     "Failed to decrypt %s: %s", vault_file, e, exc_info=logger.isEnabledFor(logging.DEBUG)
                 )
                 errors.append((str(vault_file), f"Decryption failed: {e}"))
-                failed += 1
+                result["failed"] += 1
+                continue
 
-        # Log summary
-        logger.info(f"Refresh completed: {succeeded}/{total} succeeded, {failed} failed, {skipped} skipped")
-        if errors:
-            logger.warning(f"Failed to process {len(errors)} vault files")
-            for vault_file, error in errors[:5]:  # Show first 5 errors
-                logger.warning(f"  - {vault_file}: {error}")
-            if len(errors) > 5:
-                logger.warning(f"  ... and {len(errors) - 5} more errors")
+            logger.info("Successfully restored %s from %s (authenticated ✓)", source_file, vault_file)
+            result["succeeded"] += 1
 
-        return {
-            'total': total,
-            'succeeded': succeeded,
-            'failed': failed,
-            'skipped': skipped,
-            'errors': errors
-        }
+        logger.info(
+            "Refresh completed: %s/%s succeeded, %s failed, %s skipped",
+            result["succeeded"], result["total"], result["failed"], result["skipped"],
+        )
+        self._log_errors(errors, "process")
+
+        return result
 
     def encrypt_task(self, force: bool = False) -> Dict[str, Any]:
         """Encrypt all source files to their corresponding vault files.
@@ -1089,13 +1122,11 @@ class VaultTool:
                 continue
 
         # Log summary
-        logger.info(f"Encrypt completed: {created} created, {updated} updated, {skipped} skipped, {failed} failed (total: {total})")
-        if errors:
-            logger.warning(f"Failed to encrypt {len(errors)} source files")
-            for source_file, error in errors[:5]:  # Show first 5 errors
-                logger.warning(f"  - {source_file}: {error}")
-            if len(errors) > 5:
-                logger.warning(f"  ... and {len(errors) - 5} more errors")
+        logger.info(
+            "Encrypt completed: %s created, %s updated, %s skipped, %s failed (total: %s)",
+            created, updated, skipped, failed, total,
+        )
+        self._log_errors(errors, "encrypt")
 
         return {
             'total': total,
@@ -1172,13 +1203,8 @@ class VaultTool:
                 failed += 1
 
         # Log summary
-        logger.info(f"Remove completed: {removed}/{total} removed, {failed} failed")
-        if errors:
-            logger.warning(f"Failed to remove {len(errors)} vault files")
-            for vault_file, error in errors[:5]:  # Show first 5 errors
-                logger.warning(f"  - {vault_file}: {error}")
-            if len(errors) > 5:
-                logger.warning(f"  ... and {len(errors) - 5} more errors")
+        logger.info("Remove completed: %s/%s removed, %s failed", removed, total, failed)
+        self._log_errors(errors, "remove")
 
         return {
             'total': total,
