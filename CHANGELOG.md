@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-05
+
 ### Added
 
 - End-to-end CLI tests using Typer's runner, covering `encrypt`, `refresh`, `remove`, `check-ignore`, `generate-key` (including backup, decline and `--rekey` flows), `version` and `gen-vaulttool`.
