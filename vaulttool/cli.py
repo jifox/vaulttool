@@ -21,7 +21,7 @@ import secrets
 from pathlib import Path
 from datetime import datetime
 import typer
-from . import setup_logging, get_logger
+from . import setup_logging, __version__
 from .core import VaultTool
 
 # Create app with proper help text
@@ -29,7 +29,7 @@ from .core import VaultTool
 app = typer.Typer(
     help="""Secure file encryption for secrets and configuration files.
 
-Encrypts sensitive files using AES-256-CBC and manages their encrypted counterparts.
+Encrypts sensitive files using AES-256-GCM and manages their encrypted counterparts.
 
 \b
 Key Options:
@@ -108,51 +108,13 @@ def _write_private_file(path: Path, content: str, exclusive: bool = False) -> No
 
 
 def _get_version() -> str:
-    """Get the version of vaulttool package."""
-    logger = get_logger(__name__)
+    """Return the installed VaultTool version.
 
-    try:
-        from importlib.metadata import version
-        pkg_version = version("vaulttool")
-        logger.debug(f"Retrieved version from importlib.metadata: {pkg_version}")
-        return pkg_version
-    except ImportError:
-        # importlib.metadata not available in older Python versions
-        logger.debug("importlib.metadata not available, trying fallback")
-    except Exception as e:
-        # Package not found or other metadata error
-        logger.warning(f"Failed to get version from metadata: {e}")
-
-    # Fallback - try to read from pyproject.toml if available
-    try:
-        from pathlib import Path
-
-        # Look for pyproject.toml in parent directories
-        current_dir = Path(__file__).parent
-        logger.debug(f"Looking for pyproject.toml starting from {current_dir}")
-
-        for level in range(3):  # Check up to 3 levels up
-            pyproject_path = current_dir / "pyproject.toml"
-            if pyproject_path.exists():
-                logger.debug(f"Found pyproject.toml at {pyproject_path}")
-                with open(pyproject_path, "r") as f:
-                    content = f.read()
-                    # Simple parsing for version
-                    for line in content.split('\n'):
-                        if line.strip().startswith('version = "'):
-                            fallback_version = line.split('"')[1]
-                            logger.debug(f"Extracted version from pyproject.toml: {fallback_version}")
-                            return fallback_version
-            current_dir = current_dir.parent
-            logger.debug(f"Level {level + 1}: No pyproject.toml found, checking parent")
-
-    except (IOError, OSError) as e:
-        logger.warning(f"Failed to read pyproject.toml: {e}")
-    except Exception as e:
-        logger.warning(f"Unexpected error reading pyproject.toml: {e}")
-
-    logger.debug("Using development version fallback")
-    return "unknown (development version)"
+    The version is resolved once, at import time, from the installed package
+    metadata (see :mod:`vaulttool`), so ``pyproject.toml`` never has to be
+    parsed at runtime.
+    """
+    return __version__
 
 
 @app.command("generate-key")

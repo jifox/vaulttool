@@ -1,7 +1,7 @@
 """Core VaultTool functionality for secure file encryption and management.
 
 This module contains the main VaultTool class that provides secure encryption
-and management of sensitive files using AES-256-CBC. It handles file discovery,
+and management of sensitive files using AES-256-GCM. It handles file discovery,
 encryption/decryption, and automatic .gitignore management to prevent
 accidental commits of sensitive data.
 
@@ -11,7 +11,9 @@ The VaultTool uses a vault file format where each encrypted file contains:
 
 The HMAC key and encryption key are derived from the master key file using
 HKDF (HMAC-based Key Derivation Function) for cryptographic separation.
-Encryption uses AES-256-CBC with randomly generated IVs and PKCS7 padding.
+Encryption uses AES-256-GCM with a random 96-bit nonce per file, with the
+logical path bound as additional authenticated data. Vault files written by
+older versions (AES-256-CBC + HMAC) are still readable.
 
 Environment Variables:
     VAULTTOOL_PRECOMMIT: When set, prevents .gitignore modifications during
@@ -83,11 +85,11 @@ class VaultAuthError(ValueError):
 
 
 class VaultTool:
-    """A tool for encrypting and managing sensitive files using AES-256-CBC.
+    """A tool for encrypting and managing sensitive files using AES-256-GCM.
 
     VaultTool provides secure encryption of sensitive files (like configuration files
     containing secrets) and manages their encrypted counterparts. It uses pure Python
-    cryptography with AES-256-CBC encryption and automatically handles .gitignore
+    cryptography with AES-256-GCM authenticated encryption and handles .gitignore
     updates to prevent accidental commits of plaintext sensitive data.
 
     The tool operates on source files matching configured patterns and creates
@@ -102,8 +104,6 @@ class VaultTool:
     Attributes:
         suffix: File suffix for vault files (e.g., '.vault').
         key_file: Path to the master encryption key file.
-        algorithm: Encryption algorithm (for backward compatibility, not used).
-        openssl_path: Path to openssl (for backward compatibility, not used).
         include_directories: Directories to search for source files.
         exclude_directories: Directories to exclude from search.
         include_patterns: File patterns to include (e.g., '*.env').
@@ -133,8 +133,6 @@ class VaultTool:
         if self.suffix and "." not in self.suffix:
             raise ValueError("Suffix must contain a dot (e.g., .vault, prod.vault)")
         self.key_file = options.get("key_file")
-        self.algorithm = options.get("algorithm", "aes-256-cbc")
-        self.openssl_path = options.get("openssl_path", "openssl")
         self.use_suffix_fallback = options.get("use_suffix_fallback", True)  # Default: enabled for flexible vault discovery
         self.include_directories = config.get("include_directories", ["." ])
         self.exclude_directories = set(config.get("exclude_directories", []))

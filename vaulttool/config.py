@@ -157,8 +157,8 @@ def load_config(path: str = ".vaulttool.yml") -> Dict[str, Any]:
 
     Example:
         >>> config = load_config()
-        >>> print(config['options']['algorithm'])
-        'aes-256-cbc'
+        >>> print(config['options']['suffix'])
+        '.vault'
 
         >>> # With environment override:
         >>> os.environ['VAULTTOOL_OPTIONS_KEY_FILE'] = '/custom/key'
