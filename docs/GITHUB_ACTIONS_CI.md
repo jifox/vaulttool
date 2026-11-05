@@ -102,7 +102,27 @@ The workflow uses GitHub Actions caching to speed up runs:
 - Coverage is collected using `pytest-cov`
 - Reports generated in XML and terminal formats
 - Only Python 3.12 uploads to Codecov (to avoid duplicate reports)
-- Coverage upload failures don't fail the CI (fail_ci_if_error: false)
+- Coverage upload failures don't fail the CI (`fail_ci_if_error: false`)
+
+### Codecov authentication
+
+Codecov rejects anonymous uploads from protected branches (`Token required - not valid tokenless upload`),
+which leaves the README badge stuck at **unknown**. Provide credentials in one of these ways:
+
+1. **Repository secret (recommended)** — create an upload token in the Codecov UI
+   (*Settings → General → Upload token*) and store it as `CODECOV_TOKEN`:
+   ```bash
+   gh secret set CODECOV_TOKEN
+   ```
+2. **Tokenless OIDC** — the workflow already sets `id-token: write` and `use_oidc: true`,
+   so no secret is needed once the repository is linked to Codecov and OIDC uploads are enabled there.
+
+Without either, the workflow stays green but no coverage data reaches Codecov.
+
+### Local coverage (pre-commit)
+
+The `pytest` pre-commit hook runs with `--cov=vaulttool --cov-report=term-missing:skip-covered`,
+so `pre-commit run pytest` (or a normal `git commit`) shows the coverage report locally.
 
 ## Python Version Support
 

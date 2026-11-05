@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+permissions:
+  contents: read
+  id-token: write  # Required for Codecov tokenless (OIDC) uploads
+
 jobs:
   pre-commit:
     name: Pre-commit checks
@@ -119,10 +123,14 @@ jobs:
           poetry run pytest -v --cov=vaulttool --cov-report=xml --cov-report=term
       
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: matrix.python-version == '3.12'
         with:
-          file: ./coverage.xml
+          # CODECOV_TOKEN is required by Codecov for uploads from protected
+          # branches; use_oidc enables tokenless uploads where available.
+          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
+          files: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false

@@ -15,12 +15,13 @@ Available commands:
 """
 
 import logging
+import os
 import sys
 import secrets
 from pathlib import Path
 from datetime import datetime
 import typer
-from . import setup_logging, get_logger
+from . import setup_logging, __version__
 from .core import VaultTool
 
 # Create app with proper help text
@@ -28,7 +29,7 @@ from .core import VaultTool
 app = typer.Typer(
     help="""Secure file encryption for secrets and configuration files.
 
-Encrypts sensitive files using AES-256-CBC and manages their encrypted counterparts.
+Encrypts sensitive files using AES-256-GCM and manages their encrypted counterparts.
 
 \b
 Key Options:
@@ -83,52 +84,37 @@ def _setup_cli_logging(verbose: bool = False, quiet: bool = False) -> logging.Lo
     return setup_logging(level=level, include_timestamp=False)
 
 
+def _write_private_file(path: Path, content: str, exclusive: bool = False) -> None:
+    """Write a file that is only readable by its owner (mode 0600).
+
+    The permissions are applied with ``os.open`` at creation time, so the file
+    is never world-readable, not even briefly (``write_text`` + ``chmod`` leaves
+    such a window open).
+
+    Args:
+        path: Destination path.
+        content: Text to write.
+        exclusive: If True, fail instead of overwriting an existing file.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_EXCL if exclusive else os.O_TRUNC)
+    fd = os.open(path, flags, 0o600)
+    try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        os.write(fd, content.encode("utf-8"))
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _get_version() -> str:
-    """Get the version of vaulttool package."""
-    logger = get_logger(__name__)
+    """Return the installed VaultTool version.
 
-    try:
-        from importlib.metadata import version
-        pkg_version = version("vaulttool")
-        logger.debug(f"Retrieved version from importlib.metadata: {pkg_version}")
-        return pkg_version
-    except ImportError:
-        # importlib.metadata not available in older Python versions
-        logger.debug("importlib.metadata not available, trying fallback")
-    except Exception as e:
-        # Package not found or other metadata error
-        logger.warning(f"Failed to get version from metadata: {e}")
-
-    # Fallback - try to read from pyproject.toml if available
-    try:
-        from pathlib import Path
-
-        # Look for pyproject.toml in parent directories
-        current_dir = Path(__file__).parent
-        logger.debug(f"Looking for pyproject.toml starting from {current_dir}")
-
-        for level in range(3):  # Check up to 3 levels up
-            pyproject_path = current_dir / "pyproject.toml"
-            if pyproject_path.exists():
-                logger.debug(f"Found pyproject.toml at {pyproject_path}")
-                with open(pyproject_path, "r") as f:
-                    content = f.read()
-                    # Simple parsing for version
-                    for line in content.split('\n'):
-                        if line.strip().startswith('version = "'):
-                            fallback_version = line.split('"')[1]
-                            logger.debug(f"Extracted version from pyproject.toml: {fallback_version}")
-                            return fallback_version
-            current_dir = current_dir.parent
-            logger.debug(f"Level {level + 1}: No pyproject.toml found, checking parent")
-
-    except (IOError, OSError) as e:
-        logger.warning(f"Failed to read pyproject.toml: {e}")
-    except Exception as e:
-        logger.warning(f"Unexpected error reading pyproject.toml: {e}")
-
-    logger.debug("Using development version fallback")
-    return "unknown (development version)"
+    The version is resolved once, at import time, from the installed package
+    metadata (see :mod:`vaulttool`), so ``pyproject.toml`` never has to be
+    parsed at runtime.
+    """
+    return __version__
 
 
 @app.command("generate-key")
@@ -219,9 +205,8 @@ Examples:
             # Ensure parent directory exists
             key_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Write new key
-            key_path.write_text(new_key + "\n")
-            key_path.chmod(0o600)
+            # Create the key with 0600 permissions from the start
+            _write_private_file(key_path, new_key + "\n", exclusive=True)
 
             if not quiet:
                 typer.echo(f"✅ Successfully created new key file: {key_path}")
@@ -319,9 +304,8 @@ Examples:
             # Read old key
             old_key = key_path.read_text()
 
-            # Write backup
-            backup_path.write_text(old_key)
-            backup_path.chmod(0o600)
+            # Write backup (0600, never overwrite an existing backup)
+            _write_private_file(backup_path, old_key, exclusive=True)
 
             if not quiet:
                 typer.echo(f"   ✅ Old key backed up to: {backup_path}")
@@ -334,8 +318,7 @@ Examples:
 
         # Write new key
         try:
-            key_path.write_text(new_key + "\n")
-            key_path.chmod(0o600)
+            _write_private_file(key_path, new_key + "\n")
 
             if not quiet:
                 typer.echo(f"   ✅ New key written to: {key_path}")
@@ -645,7 +628,20 @@ Example:
 
     try:
         vt = VaultTool()
-        vt.check_ignore_task()
+        result = vt.check_ignore_task()
+
+        if not quiet:
+            typer.echo("\n" + "=" * 60)
+            typer.echo("Check Ignore Summary:")
+            typer.echo(f"  Total:       {result['total']}")
+            typer.echo(f"  Ignored:     {result['ignored']}")
+            typer.echo(f"  Not ignored: {len(result['not_ignored'])}")
+            typer.echo("=" * 60)
+            for not_ignored in result["not_ignored"]:
+                typer.echo(f"  \u26a0  {not_ignored}", err=True)
+
+        if result["not_ignored"]:
+            sys.exit(1)
     except Exception as e:
         typer.echo(f"ERROR: {e}", err=True)
         sys.exit(1)

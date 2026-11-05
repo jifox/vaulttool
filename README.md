@@ -36,7 +36,7 @@ vaulttool refresh
 
 **Key Concepts:**
 
-- Encrypts files with AES-256-CBC + HMAC-SHA256
+- Encrypts files with AES-256-GCM (authenticated) + HMAC-SHA256 change detection
 - Creates `.vault` files that are safe to commit to git
 - Uses a single encryption key (store securely, don't commit!)
 - Configure via `.vaulttool.yml` or environment variables
@@ -116,7 +116,7 @@ vaulttool refresh
 - **Detects changes automatically**: Updates encrypted files whenever the original files change.
 - **Restores missing files**: Automatically decrypts files if the original is missing and a `.vault` file exists.
 - **Refreshes plaintext from vaults**: On demand, overwrite existing plaintext from `.vault` files (with `--force`).
-- **Uses AES-256-CBC encryption**: Secures your data with strong, industry-standard encryption via Python's cryptography library.
+- **Uses AES-256-GCM authenticated encryption**: Detects tampering before any plaintext is written, via Python's cryptography library.
 - **Updates .gitignore for you**: Adds plain text files to `.gitignore` to prevent accidental commits of secrets.
 - **Verifies file integrity**: Uses HMACs to make sure encrypted files are always up to date.
 - **Editor-friendly format**: Encrypted files are base64 encoded, making them easy to copy and paste.
@@ -150,7 +150,7 @@ VaultTool v2.0.0 represents a **major quality improvement** with comprehensive e
   a fixed-size output (the HMAC tag). This tag is unique to both the input data and the key, making it an effective
   way to verify data integrity and authenticity.
 
-3. **AES-256-CBC Encryption**
+3. **AES-256-GCM Encryption (AEAD)**
    - 256-bit encryption key
    - Random IV per encryption
    - PKCS7 padding
@@ -169,7 +169,7 @@ derive_keys() with HKDF
     │
     └─→ HKDF(info="encryption-key") → Encryption Key (32 bytes)
                                           ↓
-                                   Used for AES-256-CBC encryption
+                                   Used for AES-256-GCM encryption
 ```
 
 ## Vault File Format
@@ -195,7 +195,7 @@ ae5bee7bdc95c4aa85c5e773876fc78c2b8e9f4d3c7a6b5e8d1f0a9c2e4b7d6f
 - **Removed OpenSSL requirement**: Now uses Python's `cryptography` library directly
 - **Simpler installation**: Just install VaultTool with pip or Poetry - no system dependencies
 - **Better portability**: Works consistently across all platforms (Linux, macOS, Windows)
-- **Same strong encryption**: Still uses AES-256-CBC with HMAC-SHA256 for authentication
+- **Same strong encryption**: Still uses AES-256-GCM authenticated encryption
 
 **Result:** Installation is now as simple as `pip install vaulttool` or `poetry install` - no need to install OpenSSL or other system packages!
 
@@ -354,7 +354,7 @@ vaulttool
 
 - Python 3.10 or newer
 - Python packages (automatically installed):
-  - `cryptography` - For AES-256-CBC encryption and HMAC
+  - `cryptography` - For AES-256-GCM encryption and HMAC
   - `typer` - Command-line interface
   - `pyyaml` - Configuration file parsing
 
@@ -489,7 +489,7 @@ vaulttool:
     - "*.vault"
   options:
     suffix: ".vault"           # Suffix for encrypted files
-    algorithm: "aes-256-cbc"   # Encryption algorithm (AES-256-CBC)
+    algorithm: "aes-256-cbc"   # Deprecated: ignored, encryption is always AES-256-GCM
     key_type: "file"           # Key storage type
     key_file: "vault.key"      # Path to encryption key file
 ```
@@ -502,7 +502,7 @@ vaulttool:
 - **`exclude_patterns`**: Patterns for files to exclude. Defaults to `[*.vault]` (options.suffix).
 - **`options`**: Encryption settings including:
   - `suffix`: File extension for encrypted files (default: `.vault`)
-  - `algorithm`: Encryption algorithm (default: `aes-256-cbc`). Uses AES-256-CBC with HMAC-SHA256 for authentication.
+  - `algorithm`: Deprecated and ignored. Encryption always uses AES-256-GCM; legacy AES-256-CBC vault files remain readable.
   - `key_file`: Path to encryption key file (must be at least 32 bytes)
 
 **Note:** The `openssl_path` option has been removed in v2.0.0 as VaultTool now uses Python's `cryptography` library directly.
@@ -796,7 +796,7 @@ repos:
 
 ## Related Tools
 
-- **[Python Cryptography](https://cryptography.io/)**: The cryptography library used by VaultTool for AES-256-CBC encryption and HMAC
+- **[Python Cryptography](https://cryptography.io/)**: The cryptography library used by VaultTool for AES-256-GCM encryption and HMAC
 - **[pipx](https://pypa.github.io/pipx/)**: Install and run Python applications in isolated environments
 - **[pre-commit](https://pre-commit.com/)**: Framework for managing Git pre-commit hooks
 - **[Git](https://git-scm.com/)**: Version control system

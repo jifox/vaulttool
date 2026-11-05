@@ -33,7 +33,8 @@ vaulttool:
   vault_options:
     suffix: ".vault"  # Suffix for vault files
 
-    algorithm: "aes-256-cbc"  # Encryption algorithm to use for vaulting (Openssl compatible)
+    # Deprecated: ignored. Files are always encrypted with AES-256-GCM now.
+    algorithm: "aes-256-cbc"
     key_type: "file"          # 'file' or 'ask' for being prompted for a key
     key_file: "~/.vaulttool/aes-gcm.key"  # Path to the key file, if using key_type as file
     openssl_path: "openssl"  # Optional: define the path to OpenSSL binary if not in PATH

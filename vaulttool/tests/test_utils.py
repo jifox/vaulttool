@@ -1,5 +1,10 @@
 import tempfile
 import os
+
+from unittest import mock
+
+import pytest
+
 from vaulttool.utils import compute_checksum, encode_base64, compute_hmac, derive_keys
 
 def test_compute_checksum_and_base64():
@@ -77,3 +82,18 @@ def test_compute_hmac():
         os.unlink(test_file)
         os.unlink(key_file)
 
+
+def test_derive_keys_wraps_hkdf_failures():
+    """An exception from HKDF.derive() is logged and re-raised unchanged."""
+    with tempfile.NamedTemporaryFile(delete=False, mode="wb") as kf:
+        kf.write(b"test_master_key_for_derivation_1234567890")
+        kf.flush()
+        key_file = kf.name
+
+    try:
+        with mock.patch("vaulttool.utils.HKDF") as mock_hkdf:
+            mock_hkdf.return_value.derive.side_effect = RuntimeError("kdf boom")
+            with pytest.raises(RuntimeError, match="kdf boom"):
+                derive_keys(key_file)
+    finally:
+        os.unlink(key_file)

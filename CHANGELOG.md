@@ -5,6 +5,34 @@ All notable changes to VaultTool will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **Vault format v2 uses AES-256-GCM instead of AES-256-CBC.** Payloads are authenticated (AEAD), so tampering is detected *before* any plaintext is produced. Vault files written by older versions remain readable and are upgraded the next time they are re-encrypted.
+- Each payload is bound to its logical path through additional authenticated data (AAD): swapping `a.env.vault` with `b.env.vault` is now detected instead of silently accepted.
+- Decryption is performed in memory and the plaintext is written only after authentication succeeds; previously the plaintext hit the disk before the HMAC check, and a failed check could delete an existing file.
+- Master keys and key backups are created with `0600` permissions at `open()` time (previously `write_text()` + `chmod()`, which left a world-readable window). Key backups are created exclusively and loose key permissions now produce a warning.
+- AES-CBC decryption input is size-capped like encryption (previously unbounded, allowing memory exhaustion).
+- HMAC comparison uses `hmac.compare_digest()`, and the digest line must match `[0-9a-f]{64}` exactly.
+
+### Changed
+
+- `check-ignore` now genuinely asks Git (`git check-ignore`) which source files would be tracked, reports them, and exits non-zero when any are not ignored. It no longer modifies `.gitignore`.
+- `exclude_directories` matches whole path components, so excluding `.git` no longer excludes `.gitignore` and excluding `tests` no longer excludes `contest/`.
+- Source files matched by several include patterns are processed once instead of once per pattern.
+- Vault files are written as bytes through a temporary file and an atomic rename (also fixes a byte-count mismatch on platforms with newline translation).
+- `__version__` is read from installed package metadata instead of a hard-coded string that had drifted from `pyproject.toml`.
+- The `pytest` pre-commit hook now reports coverage (`--cov=vaulttool --cov-report=term-missing:skip-covered`).
+
+### Removed
+
+- `vaulttool.utils.get_git_branch()` (unused, no callers) and the unused `VaultTool.algorithm` / `VaultTool.openssl_path` attributes. The `options.algorithm` and `options.openssl_path` config keys are still accepted but ignored.
+
+### Fixed
+
+- Codecov uploads failed with `Token required - not valid tokenless upload`, leaving the README coverage badge at **unknown**. The CI workflow now uses `codecov/codecov-action@v5` with `files`, passes `CODECOV_TOKEN` when available, enables tokenless OIDC uploads (`permissions: id-token: write`, `use_oidc: true`), and ships a `codecov.yml` configuration.
+
 ## [2.0.4] - 2026-11-05
 
 ### Fixed

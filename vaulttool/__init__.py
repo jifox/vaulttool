@@ -1,17 +1,18 @@
 """VaultTool - Secure file encryption for secrets and configuration files.
 
 This package provides secure encryption and management of sensitive files using
-AES-256-CBC encryption with HMAC authentication.
+AES-256-GCM authenticated encryption (legacy AES-256-CBC vaults remain readable).
 """
 
 import logging
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from typing import Optional
 
-__version__ = "2.0.0"
-
-# Default logger for the package
-_logger: Optional[logging.Logger] = None
+try:  # pragma: no cover - depends on how the package is installed
+    __version__ = version("vaulttool")
+except PackageNotFoundError:  # pragma: no cover
+    __version__ = "0.0.0+unknown"
 
 
 def get_logger(name: str = "vaulttool") -> logging.Logger:
@@ -76,9 +77,6 @@ def setup_logging(
 
     # Prevent propagation to root logger to avoid duplicate messages
     logger.propagate = False
-
-    global _logger
-    _logger = logger
 
     return logger
 
