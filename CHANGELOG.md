@@ -5,6 +5,12 @@ All notable changes to VaultTool will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] - 2026-11-05
+
+### Fixed
+
+- Package metadata no longer advertises the placeholder homepage `https://github.com/yourusername/vaulttool`. Project URLs are now declared explicitly in `[project.urls]` (`Homepage`, `Repository`, `Issues`, `Changelog`) and the deprecated `[tool.poetry]` `homepage` key was removed.
+
 ## [2.0.3] - 2026-11-05
 
 ### Added

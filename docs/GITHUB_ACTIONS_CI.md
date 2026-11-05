@@ -215,8 +215,8 @@ rm -rf build/ dist/ *.egg-info
 
 Add to README.md:
 ```markdown
-![CI](https://github.com/yourusername/vaulttool/workflows/CI/badge.svg)
-[![codecov](https://codecov.io/gh/yourusername/vaulttool/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/vaulttool)
+![CI](https://github.com/jifox/vaulttool/workflows/CI/badge.svg)
+[![codecov](https://codecov.io/gh/jifox/vaulttool/branch/main/graph/badge.svg)](https://codecov.io/gh/jifox/vaulttool)
 ```
 
 ## Further Reading
