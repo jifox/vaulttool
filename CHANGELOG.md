@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-05
+
 ### Security
 
 - **Vault format v2 uses AES-256-GCM instead of AES-256-CBC.** Payloads are authenticated (AEAD), so tampering is detected *before* any plaintext is produced. Vault files written by older versions remain readable and are upgraded the next time they are re-encrypted.
