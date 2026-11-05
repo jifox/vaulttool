@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.3] - 2026-11-05
 
+### Added
+
+- Python 3.14 is now tested in the CI matrix (pre-commit and test jobs) alongside 3.10–3.13. The full test suite passes on 3.14.
+
 ### Changed
 
 - Refreshed all dependencies with `poetry update`:

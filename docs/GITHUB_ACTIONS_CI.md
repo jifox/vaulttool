@@ -20,12 +20,12 @@ The workflow runs on:
 
 **Purpose:** Runs all pre-commit hooks to ensure code quality and style consistency.
 
-**Matrix Strategy:** Tests against Python 3.10, 3.11, 3.12, and 3.13
+**Matrix Strategy:** Tests against Python 3.10, 3.11, 3.12, 3.13, and 3.14
 
 **Steps:**
 1. **Check out code** - Uses `actions/checkout@v4`
 2. **Set up Python** - Installs specified Python version
-3. **Install Poetry** - Uses `snok/install-poetry@v1` (v1.8.3)
+3. **Install Poetry** - Uses `snok/install-poetry@v1` (v2.3.1)
 4. **Cache virtual environment** - Caches `.venv` based on `poetry.lock` hash
 5. **Install dependencies** - Runs `poetry install` (skipped if cached)
 6. **Create test key file** - Generates encryption key for tests
@@ -41,7 +41,7 @@ The workflow runs on:
 
 **Purpose:** Runs the full test suite with coverage reporting.
 
-**Matrix Strategy:** Tests against Python 3.10, 3.11, 3.12, and 3.13
+**Matrix Strategy:** Tests against Python 3.10, 3.11, 3.12, 3.13, and 3.14
 
 **Steps:**
 1. **Check out code**
@@ -111,8 +111,7 @@ The workflow uses GitHub Actions caching to speed up runs:
 - Python 3.11
 - Python 3.12
 - Python 3.13
-
-**Note:** Python 3.14 is not yet released, so it's not included in the matrix.
+- Python 3.14
 
 ## Configuration Files
 
@@ -179,7 +178,7 @@ If dependencies seem stale:
 ### Python Version Not Available
 
 If a Python version fails to install:
-- Check Python 3.13 availability in GitHub Actions runners
+- Check Python 3.14 availability in GitHub Actions runners
 - May need to wait for official runner image updates
 - Consider using `actions/setup-python@v5` with deadsnakes PPA
 
@@ -187,7 +186,7 @@ If a Python version fails to install:
 
 ### Updating Python Versions
 
-To add Python 3.14 (when released):
+To add a new Python version:
 ```yaml
 strategy:
   matrix:
@@ -201,7 +200,7 @@ Change in both jobs:
 - name: Install Poetry
   uses: snok/install-poetry@v1
   with:
-    version: 1.9.0  # Update version here
+    version: 2.3.1  # Keep in sync with the local Poetry that generated poetry.lock
 ```
 
 ### Adding More Cleanup
