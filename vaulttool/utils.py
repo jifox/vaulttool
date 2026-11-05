@@ -71,27 +71,27 @@ def derive_keys(key_file: str, salt: bytes = b"vaulttool-v1") -> Tuple[bytes, by
     """
     key_path = Path(key_file).resolve()
 
-    logger.debug(f"Deriving keys from key file: {key_file}")
+    logger.debug("Deriving keys from key file: %s", key_file)
 
     # Validate file exists and is a regular file
     if not key_path.exists():
-        logger.error(f"Key file not found: {key_file}")
+        logger.error("Key file not found: %s", key_file)
         raise FileNotFoundError(f"Key file not found: {key_file}")
     if not key_path.is_file():
-        logger.error(f"Key path is not a regular file: {key_file}")
+        logger.error("Key path is not a regular file: %s", key_file)
         raise ValueError(f"Key path is not a regular file: {key_file}")
 
     # Check file size (prevent reading huge files, require minimum entropy)
     file_size = key_path.stat().st_size
-    logger.debug(f"Key file size: {file_size} bytes")
+    logger.debug("Key file size: %s bytes", file_size)
     if file_size == 0:
-        logger.error(f"Key file is empty: {key_file}")
+        logger.error("Key file is empty: %s", key_file)
         raise ValueError(f"Key file is empty: {key_file}")
     if file_size < MIN_KEY_SIZE:  # Minimum 128 bits for security
-        logger.error(f"Key file too small: {file_size} bytes (minimum 16 bytes required)")
+        logger.error("Key file too small: %s bytes (minimum 16 bytes required)", file_size)
         raise ValueError(f"Key file too small: {file_size} bytes (minimum 16 bytes required)")
     if file_size > MAX_KEY_SIZE:  # Max 1MB to prevent memory issues
-        logger.error(f"Key file too large: {file_size} bytes (maximum 1MB)")
+        logger.error("Key file too large: %s bytes (maximum 1MB)", file_size)
         raise ValueError(f"Key file too large: {file_size} bytes (maximum 1MB)")
 
     # Read key material verbatim (only trailing line endings are removed, so
@@ -115,7 +115,7 @@ def derive_keys(key_file: str, salt: bytes = b"vaulttool-v1") -> Tuple[bytes, by
 
     logger.debug("Key material: %s bytes", len(master_key))
 
-    logger.debug(f"Key material: {len(master_key)} bytes")
+    logger.debug("Key material: %s bytes", len(master_key))
 
     # Derive HMAC key (32 bytes for SHA-256)
     hkdf_hmac = HKDF(
@@ -136,10 +136,10 @@ def derive_keys(key_file: str, salt: bytes = b"vaulttool-v1") -> Tuple[bytes, by
     try:
         hmac_key = hkdf_hmac.derive(master_key)
         encryption_key = hkdf_enc.derive(master_key)
-        logger.debug(f"Successfully derived HMAC key (32 bytes) and encryption key (32 bytes) from {key_file}")
+        logger.debug("Successfully derived HMAC key (32 bytes) and encryption key (32 bytes) from %s", key_file)
         return hmac_key, encryption_key
     except Exception as e:
-        logger.error(f"Key derivation failed for {key_file}: {e}", exc_info=True)
+        logger.error("Key derivation failed for %s: %s", key_file, e, exc_info=True)
         raise
 
 

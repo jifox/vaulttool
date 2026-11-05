@@ -56,6 +56,34 @@ Examples:
 )
 
 # Global options for logging control
+@app.callback()
+def main(
+    ctx: typer.Context,
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose debug logging"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Show only errors"),
+) -> None:
+    """Secure file encryption for secrets and configuration files."""
+    ctx.obj = {"verbose": verbose, "quiet": quiet}
+
+
+def _verbosity(ctx: typer.Context, verbose: bool, quiet: bool) -> tuple[bool, bool]:
+    """Merge the root options (``vaulttool -v cmd``) with command options.
+
+    Both spellings are supported: ``vaulttool --verbose encrypt`` and
+    ``vaulttool encrypt --verbose``.
+
+    Args:
+        ctx: Typer context carrying the root options.
+        verbose: Command-level ``--verbose`` value.
+        quiet: Command-level ``--quiet`` value.
+
+    Returns:
+        Tuple of (verbose, quiet).
+    """
+    root = ctx.obj or {}
+    return verbose or bool(root.get("verbose")), quiet or bool(root.get("quiet"))
+
+
 verbose_option = typer.Option(False, "--verbose", "-v", help="Enable verbose debug logging")
 quiet_option = typer.Option(False, "--quiet", "-q", help="Show only errors (suppress info/warning)")
 
@@ -107,6 +135,47 @@ def _write_private_file(path: Path, content: str, exclusive: bool = False) -> No
         os.close(fd)
 
 
+class Ui:
+    """Console helper that centralises CLI output and ``--quiet`` handling.
+
+    Each command builds one instance from its ``--quiet`` flag, so the
+    ``if not quiet:`` boilerplate lives in a single place.
+    """
+
+    def __init__(self, quiet: bool = False) -> None:
+        self.quiet = quiet
+
+    def say(self, message: str = "", err: bool = False) -> None:
+        """Print an informational message unless --quiet was requested."""
+        if not self.quiet:
+            typer.echo(message, err=err)
+
+    def error(self, message: str) -> None:
+        """Print an error message; errors are never suppressed."""
+        typer.echo(message, err=True)
+
+    def heading(self, title: str) -> None:
+        """Print a ``====`` banner around ``title``."""
+        self.say("\n" + "=" * 60)
+        self.say(title)
+        self.say("=" * 60)
+
+    def summary(self, title: str, rows) -> None:
+        """Print an aligned label/value summary block.
+
+        Args:
+            title: Heading shown above the rows.
+            rows: Iterable of ``(label, value)`` pairs.
+        """
+        rows = list(rows)
+        self.heading(title)
+        if not rows:
+            return
+        width = max(len(str(label)) for label, _ in rows)
+        for label, value in rows:
+            self.say(f"  {str(label) + ':':<{width + 1}} {value}")
+
+
 def _get_version() -> str:
     """Return the installed VaultTool version.
 
@@ -119,6 +188,7 @@ def _get_version() -> str:
 
 @app.command("generate-key")
 def generate_key_cmd(
+    ctx: typer.Context,
     key_file: str = typer.Option(
         None,
         "--key-file",
@@ -160,7 +230,9 @@ Examples:
   vaulttool generate-key --rekey                      # Generate and rekey
   vaulttool generate-key --key-file ~/.vault/key      # Custom location
     """
+    verbose, quiet = _verbosity(ctx, verbose, quiet)
     logger = _setup_cli_logging(verbose, quiet)
+    ui = Ui(quiet)
 
     try:
         # Determine key file path
@@ -179,8 +251,7 @@ Examples:
                     )
                     sys.exit(1)
 
-                if not quiet:
-                    typer.echo(f"Using key file from config: {key_file}")
+                ui.say(f"Using key file from config: {key_file}")
             except Exception as e:
                 typer.echo(
                     f"ERROR: Cannot load configuration. "
@@ -198,9 +269,8 @@ Examples:
 
         if not key_exists:
             # Create new key file
-            if not quiet:
-                typer.echo(f"\nKey file does not exist: {key_path}")
-                typer.echo("Creating new key file...")
+            ui.say(f"\nKey file does not exist: {key_path}")
+            ui.say("Creating new key file...")
 
             # Ensure parent directory exists
             key_path.parent.mkdir(parents=True, exist_ok=True)
@@ -208,22 +278,20 @@ Examples:
             # Create the key with 0600 permissions from the start
             _write_private_file(key_path, new_key + "\n", exclusive=True)
 
-            if not quiet:
-                typer.echo(f"✅ Successfully created new key file: {key_path}")
-                typer.echo("   Permissions: 600 (owner read/write only)")
-                typer.echo("\n⚠️  IMPORTANT: Back up this key file securely!")
-                typer.echo("   Without this key, you cannot decrypt your vault files.")
+            ui.say(f"✅ Successfully created new key file: {key_path}")
+            ui.say("   Permissions: 600 (owner read/write only)")
+            ui.say("\n⚠️  IMPORTANT: Back up this key file securely!")
+            ui.say("   Without this key, you cannot decrypt your vault files.")
 
             return
 
         # Key file exists - offer backup and replace
-        if not quiet:
-            typer.echo(f"\n⚠️  Key file already exists: {key_path}")
-            typer.echo("\nOptions:")
-            typer.echo("  1. Backup old key and replace with new key")
-            if rekey:
-                typer.echo("  2. Re-encrypt all vault files with new key (--rekey enabled)")
-            typer.echo("  3. Cancel operation")
+        ui.say(f"\n⚠️  Key file already exists: {key_path}")
+        ui.say("\nOptions:")
+        ui.say("  1. Backup old key and replace with new key")
+        if rekey:
+            ui.say("  2. Re-encrypt all vault files with new key (--rekey enabled)")
+        ui.say("  3. Cancel operation")
 
         if not force:
             if rekey:
@@ -250,23 +318,20 @@ Examples:
 
         # Perform rekey if requested
         if rekey:
-            if not quiet:
-                typer.echo("\n" + "="*60)
-                typer.echo("Starting rekey process...")
-                typer.echo("="*60)
+            ui.say("\n" + "="*60)
+            ui.say("Starting rekey process...")
+            ui.say("="*60)
 
             # Step 1: Restore plaintext files from vaults
-            if not quiet:
-                typer.echo("\n[1/5] Restoring plaintext files from vaults...")
+            ui.say("\n[1/5] Restoring plaintext files from vaults...")
 
             try:
                 vt = VaultTool()
                 refresh_result = vt.refresh_task(force=True)
 
-                if not quiet:
-                    typer.echo(f"   ✅ Restored: {refresh_result['succeeded']} files")
-                    if refresh_result['failed'] > 0:
-                        typer.echo(f"   ❌ Failed: {refresh_result['failed']} files", err=True)
+                ui.say(f"   ✅ Restored: {refresh_result['succeeded']} files")
+                if refresh_result['failed'] > 0:
+                    ui.say(f"   ❌ Failed: {refresh_result['failed']} files", err=True)
 
                 if refresh_result['failed'] > 0:
                     typer.echo("\nERROR: Failed to restore some files. Aborting rekey.", err=True)
@@ -277,24 +342,21 @@ Examples:
                 sys.exit(1)
 
             # Step 2: Remove old vault files
-            if not quiet:
-                typer.echo("\n[2/5] Removing old vault files...")
+            ui.say("\n[2/5] Removing old vault files...")
 
             try:
                 remove_result = vt.remove_task()
 
-                if not quiet:
-                    typer.echo(f"   ✅ Removed: {remove_result['removed']} vault files")
-                    if remove_result['failed'] > 0:
-                        typer.echo(f"   ❌ Failed: {remove_result['failed']} files", err=True)
+                ui.say(f"   ✅ Removed: {remove_result['removed']} vault files")
+                if remove_result['failed'] > 0:
+                    ui.say(f"   ❌ Failed: {remove_result['failed']} files", err=True)
 
             except Exception as e:
                 typer.echo(f"\nERROR during remove: {e}", err=True)
                 sys.exit(1)
 
             # Step 3 & 4: Backup old key and write new key
-            if not quiet:
-                typer.echo("\n[3/5] Backing up old key...")
+            ui.say("\n[3/5] Backing up old key...")
 
         # Backup existing key
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -307,21 +369,18 @@ Examples:
             # Write backup (0600, never overwrite an existing backup)
             _write_private_file(backup_path, old_key, exclusive=True)
 
-            if not quiet:
-                typer.echo(f"   ✅ Old key backed up to: {backup_path}")
+            ui.say(f"   ✅ Old key backed up to: {backup_path}")
         except Exception as e:
             typer.echo(f"\nERROR: Failed to backup old key: {e}", err=True)
             sys.exit(1)
 
-        if not quiet:
-            typer.echo("\n[4/5] Writing new key...")
+        ui.say("\n[4/5] Writing new key...")
 
         # Write new key
         try:
             _write_private_file(key_path, new_key + "\n")
 
-            if not quiet:
-                typer.echo(f"   ✅ New key written to: {key_path}")
+            ui.say(f"   ✅ New key written to: {key_path}")
         except Exception as e:
             typer.echo(f"\nERROR: Failed to write new key: {e}", err=True)
             typer.echo(f"   Old key backup is safe at: {backup_path}")
@@ -329,19 +388,17 @@ Examples:
 
         # Step 5: Re-encrypt with new key
         if rekey:
-            if not quiet:
-                typer.echo("\n[5/5] Re-encrypting files with new key...")
+            ui.say("\n[5/5] Re-encrypting files with new key...")
 
             try:
                 # Reload VaultTool with new key
                 vt = VaultTool()
                 encrypt_result = vt.encrypt_task(force=True)
 
-                if not quiet:
-                    typer.echo(f"   ✅ Created: {encrypt_result['created']} vault files")
-                    typer.echo(f"   ✅ Updated: {encrypt_result['updated']} vault files")
-                    if encrypt_result['failed'] > 0:
-                        typer.echo(f"   ❌ Failed: {encrypt_result['failed']} files", err=True)
+                ui.say(f"   ✅ Created: {encrypt_result['created']} vault files")
+                ui.say(f"   ✅ Updated: {encrypt_result['updated']} vault files")
+                if encrypt_result['failed'] > 0:
+                    ui.say(f"   ❌ Failed: {encrypt_result['failed']} files", err=True)
 
                 if encrypt_result['failed'] > 0:
                     typer.echo("\nWARNING: Some files failed to encrypt.", err=True)
@@ -354,24 +411,21 @@ Examples:
                 sys.exit(1)
 
         # Success summary
-        if not quiet:
-            typer.echo("\n" + "="*60)
-            typer.echo("✅ Key generation complete!")
-            typer.echo("="*60)
-            typer.echo(f"   New key: {key_path}")
-            typer.echo(f"   Backup:  {backup_path}")
-
-            if rekey:
-                typer.echo("\n   Rekey summary:")
-                typer.echo(f"     - Restored {refresh_result['succeeded']} plaintext files")
-                typer.echo(f"     - Removed {remove_result['removed']} old vault files")
-                typer.echo(f"     - Created {encrypt_result['created'] + encrypt_result['updated']} new vault files")
-
-            typer.echo("\n⚠️  IMPORTANT:")
-            typer.echo("   1. Back up both keys securely")
-            typer.echo("   2. Test decryption before deleting backup")
-            if rekey:
-                typer.echo("   3. Commit new vault files to version control")
+        ui.say("\n" + "="*60)
+        ui.say("✅ Key generation complete!")
+        ui.say("="*60)
+        ui.say(f"   New key: {key_path}")
+        ui.say(f"   Backup:  {backup_path}")
+        if rekey:
+            ui.say("\n   Rekey summary:")
+            ui.say(f"     - Restored {refresh_result['succeeded']} plaintext files")
+            ui.say(f"     - Removed {remove_result['removed']} old vault files")
+            ui.say(f"     - Created {encrypt_result['created'] + encrypt_result['updated']} new vault files")
+        ui.say("\n⚠️  IMPORTANT:")
+        ui.say("   1. Back up both keys securely")
+        ui.say("   2. Test decryption before deleting backup")
+        if rekey:
+            ui.say("   3. Commit new vault files to version control")
 
     except KeyboardInterrupt:
         typer.echo("\n\nOperation cancelled by user.", err=True)
@@ -384,6 +438,7 @@ Examples:
 
 @app.command("version")
 def version_cmd(
+    ctx: typer.Context,
     verbose: bool = verbose_option,
     quiet: bool = quiet_option,
 ):
@@ -396,6 +451,7 @@ Shows the currently installed version of VaultTool.
 Example:
   vaulttool version
     """
+    verbose, quiet = _verbosity(ctx, verbose, quiet)
     _setup_cli_logging(verbose, quiet)
     pkg_version = _get_version()
     typer.echo(f"VaultTool version {pkg_version}")
@@ -470,6 +526,7 @@ vaulttool:
 
 @app.command()
 def remove(
+    ctx: typer.Context,
     verbose: bool = verbose_option,
     quiet: bool = quiet_option,
 ):
@@ -483,31 +540,31 @@ include directories that match the suffix pattern. This operation cannot be undo
 Example:
   vaulttool remove
     """
+    verbose, quiet = _verbosity(ctx, verbose, quiet)
     _setup_cli_logging(verbose, quiet)
+    ui = Ui(quiet)
 
     try:
         vt = VaultTool()
         result = vt.remove_task()
 
-        # Display summary
-        if not quiet:
-            typer.echo("\n" + "="*60)
-            typer.echo("Remove Summary:")
-            typer.echo(f"  Total:   {result['total']}")
-            typer.echo(f"  Removed: {result['removed']}")
-            typer.echo(f"  Failed:  {result['failed']}")
-            typer.echo("="*60)
+        ui.summary("Remove Summary:", [
+            ("Total", result["total"]),
+            ("Removed", result["removed"]),
+            ("Failed", result["failed"]),
+        ])
 
         if result['failed'] > 0:
             sys.exit(1)
 
     except Exception as e:
-        typer.echo(f"ERROR: {e}", err=True)
+        ui.error(f"ERROR: {e}")
         sys.exit(1)
 
 
 @app.command()
 def encrypt(
+    ctx: typer.Context,
     force: bool = typer.Option(False, "--force", help="Re-encrypt and overwrite existing .vault files"),
     verbose: bool = verbose_option,
     quiet: bool = quiet_option,
@@ -531,33 +588,33 @@ Examples:
   vaulttool encrypt --force        # Re-encrypt all files
   vaulttool --verbose encrypt      # Show debug output
     """
+    verbose, quiet = _verbosity(ctx, verbose, quiet)
     _setup_cli_logging(verbose, quiet)
+    ui = Ui(quiet)
 
     try:
         vt = VaultTool()
         result = vt.encrypt_task(force=force)
 
-        # Display summary
-        if not quiet:
-            typer.echo("\n" + "="*60)
-            typer.echo("Encrypt Summary:")
-            typer.echo(f"  Total:    {result['total']}")
-            typer.echo(f"  Created:  {result['created']}")
-            typer.echo(f"  Updated:  {result['updated']}")
-            typer.echo(f"  Skipped:  {result['skipped']}")
-            typer.echo(f"  Failed:   {result['failed']}")
-            typer.echo("="*60)
+        ui.summary("Encrypt Summary:", [
+            ("Total", result["total"]),
+            ("Created", result["created"]),
+            ("Updated", result["updated"]),
+            ("Skipped", result["skipped"]),
+            ("Failed", result["failed"]),
+        ])
 
         if result['failed'] > 0:
             sys.exit(1)
 
     except Exception as e:
-        typer.echo(f"ERROR: {e}", err=True)
+        ui.error(f"ERROR: {e}")
         sys.exit(1)
 
 
 @app.command()
 def refresh(
+    ctx: typer.Context,
     force: bool = typer.Option(
         True,
         "--force/--no-force",
@@ -585,32 +642,32 @@ Examples:
   vaulttool refresh --no-force     # Restore only missing files
   vaulttool --verbose refresh      # Show debug output
     """
+    verbose, quiet = _verbosity(ctx, verbose, quiet)
     _setup_cli_logging(verbose, quiet)
+    ui = Ui(quiet)
 
     try:
         vt = VaultTool()
         result = vt.refresh_task(force=force)
 
-        # Display summary
-        if not quiet:
-            typer.echo("\n" + "="*60)
-            typer.echo("Refresh Summary:")
-            typer.echo(f"  Total:     {result['total']}")
-            typer.echo(f"  Succeeded: {result['succeeded']}")
-            typer.echo(f"  Failed:    {result['failed']}")
-            typer.echo(f"  Skipped:   {result['skipped']}")
-            typer.echo("="*60)
+        ui.summary("Refresh Summary:", [
+            ("Total", result["total"]),
+            ("Succeeded", result["succeeded"]),
+            ("Failed", result["failed"]),
+            ("Skipped", result["skipped"]),
+        ])
 
         if result['failed'] > 0:
             sys.exit(1)
 
     except Exception as e:
-        typer.echo(f"ERROR: {e}", err=True)
+        ui.error(f"ERROR: {e}")
         sys.exit(1)
 
 
 @app.command()
 def check_ignore(
+    ctx: typer.Context,
     verbose: bool = verbose_option,
     quiet: bool = quiet_option,
 ):
@@ -624,24 +681,25 @@ properly added to .gitignore to prevent accidental commits of sensitive data.
 Example:
   vaulttool check-ignore
     """
+    verbose, quiet = _verbosity(ctx, verbose, quiet)
     _setup_cli_logging(verbose, quiet)
+    ui = Ui(quiet)
 
     try:
         vt = VaultTool()
         result = vt.check_ignore_task()
 
-        if not quiet:
-            typer.echo("\n" + "=" * 60)
-            typer.echo("Check Ignore Summary:")
-            typer.echo(f"  Total:       {result['total']}")
-            typer.echo(f"  Ignored:     {result['ignored']}")
-            typer.echo(f"  Not ignored: {len(result['not_ignored'])}")
-            typer.echo("=" * 60)
-            for not_ignored in result["not_ignored"]:
-                typer.echo(f"  \u26a0  {not_ignored}", err=True)
+        ui.say("\n" + "=" * 60)
+        ui.say("Check Ignore Summary:")
+        ui.say(f"  Total:       {result['total']}")
+        ui.say(f"  Ignored:     {result['ignored']}")
+        ui.say(f"  Not ignored: {len(result['not_ignored'])}")
+        ui.say("=" * 60)
+        for not_ignored in result["not_ignored"]:
+            ui.say(f"  \u26a0  {not_ignored}", err=True)
 
         if result["not_ignored"]:
             sys.exit(1)
     except Exception as e:
-        typer.echo(f"ERROR: {e}", err=True)
+        ui.error(f"ERROR: {e}")
         sys.exit(1)

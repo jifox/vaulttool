@@ -29,7 +29,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, TypedDict, Union
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.backends import default_backend
@@ -82,6 +82,49 @@ class VaultFormatError(ValueError):
 
 class VaultAuthError(ValueError):
     """Raised when a vault file fails authentication (tag or digest mismatch)."""
+
+
+class TaskResult(TypedDict, total=False):
+    """Fields shared by every VaultTool task result.
+
+    Task results are plain dictionaries (``result["failed"]``) so that they stay
+    easy to print and JSON-serialise; this TypedDict only documents the shape for
+    type checkers.
+    """
+
+    total: int
+    failed: int
+    errors: List[Tuple[str, str]]
+
+
+class RefreshResult(TaskResult, total=False):
+    """Result of :meth:`VaultTool.refresh_task`."""
+
+    succeeded: int
+    skipped: int
+
+
+class EncryptResult(TaskResult, total=False):
+    """Result of :meth:`VaultTool.encrypt_task`."""
+
+    created: int
+    updated: int
+    skipped: int
+
+
+class RemoveResult(TaskResult, total=False):
+    """Result of :meth:`VaultTool.remove_task`."""
+
+    removed: int
+
+
+class CheckIgnoreResult(TypedDict, total=False):
+    """Result of :meth:`VaultTool.check_ignore_task`."""
+
+    total: int
+    ignored: int
+    not_ignored: List[str]
+    errors: List[Tuple[str, str]]
 
 
 class VaultTool:
@@ -175,7 +218,7 @@ class VaultTool:
             else:
                 resolved = file_path_obj.resolve(strict=False)
         except (OSError, RuntimeError) as e:
-            self.logger.debug(f"Path resolution failed for '{file_path}': {e}", exc_info=True)
+            self.logger.debug("Path resolution failed for '%s': %s", file_path, e, exc_info=True)
             raise ValueError(f"Invalid file path '{file_path}': {e}") from e
 
         # Check file is within current working directory
@@ -355,7 +398,7 @@ class VaultTool:
                 if base.endswith(ext):
                     # The file extension is part of the filename, not the vault suffix
                     # So the vault suffix is just ".vault"
-                    logger.debug(f"Detected common file extension {ext!r} in {vault_path!r}, using .vault as suffix")
+                    logger.debug("Detected common file extension %r in %r, using .vault as suffix", ext, vault_path)
                     return ".vault"
             
             # No common extension found, so try to find a custom suffix
@@ -369,7 +412,7 @@ class VaultTool:
             if split_idx >= 0:
                 # Found a dot or underscore, so custom suffix is from that position to ".vault"
                 inferred_suffix = base[split_idx:] + ".vault"
-                logger.debug(f"Inferred vault suffix {inferred_suffix!r} for file {vault_path!r}")
+                logger.debug("Inferred vault suffix %r for file %r", inferred_suffix, vault_path)
                 return inferred_suffix
             else:
                 # No dot or underscore found in base, so suffix is just ".vault"
@@ -605,7 +648,7 @@ class VaultTool:
         if rel_path not in gitignore_lines:
             with open(gitignore_path, "a", encoding="utf-8") as gi:
                 gi.write(f"{rel_path}\n")
-            logger.info(f"Added {rel_path} to .gitignore")
+            logger.info("Added %s to .gitignore", rel_path)
 
     def _is_excluded(self, source_file: Path) -> bool:
         """Return True when a file matches an exclude pattern or directory.
@@ -745,7 +788,7 @@ class VaultTool:
             if not source_file.exists():
                 yield source_file
 
-    def check_ignore_task(self) -> Dict[str, Any]:
+    def check_ignore_task(self) -> CheckIgnoreResult:
         """Validate that every source file is ignored by Git.
 
         Uses ``git check-ignore`` to decide whether each plaintext file would be
@@ -781,12 +824,9 @@ class VaultTool:
         for path, error in errors:
             logger.debug("git check-ignore failed for %s: %s", path, error)
 
-        return {
-            "total": total,
-            "ignored": ignored,
-            "not_ignored": not_ignored,
-            "errors": errors,
-        }
+        return CheckIgnoreResult(
+            total=total, ignored=ignored, not_ignored=not_ignored, errors=errors
+        )
 
     @staticmethod
     def _is_git_ignored(path: Path) -> bool:
@@ -915,7 +955,7 @@ class VaultTool:
         if len(errors) > 5:
             logger.warning("  ... and %s more errors", len(errors) - 5)
 
-    def refresh_task(self, force: bool = True) -> Dict[str, Any]:
+    def refresh_task(self, force: bool = True) -> RefreshResult:
         """Decrypt and restore source files from their vault files.
 
         For each vault file found in the configured directories, decrypts and
@@ -936,7 +976,7 @@ class VaultTool:
         """
         logger.info("Starting refresh task (force=%s)", force)
 
-        result: Dict[str, Any] = {"total": 0, "succeeded": 0, "failed": 0, "skipped": 0, "errors": []}
+        result: RefreshResult = {"total": 0, "succeeded": 0, "failed": 0, "skipped": 0, "errors": []}
         errors: List[Tuple[str, str]] = result["errors"]
 
         vault_files = list(self.iter_vault_files())
@@ -984,7 +1024,7 @@ class VaultTool:
 
         return result
 
-    def encrypt_task(self, force: bool = False) -> Dict[str, Any]:
+    def encrypt_task(self, force: bool = False) -> EncryptResult:
         """Encrypt all source files to their corresponding vault files.
 
         Processes all source files matching the configured patterns and creates
@@ -1007,7 +1047,7 @@ class VaultTool:
 
             This format provides both integrity verification and secure storage.
         """
-        logger.info(f"Starting encrypt task (force={force})")
+        logger.info("Starting encrypt task (force=%s)", force)
 
         # Initialize counters for aggregation
         total = 0
@@ -1018,7 +1058,7 @@ class VaultTool:
         errors = []
 
         source_files = list(self.iter_source_files())
-        logger.info(f"Found {len(source_files)} source files to process")
+        logger.info("Found %s source files to process", len(source_files))
 
         for source_file in source_files:
             total += 1
@@ -1027,7 +1067,7 @@ class VaultTool:
 
             try:
                 # Compute HMAC of current source file
-                logger.debug(f"Computing HMAC for {source_file}")
+                logger.debug("Computing HMAC for %s", source_file)
                 hmac_tag = compute_hmac(source_file, self.hmac_key)
 
                 # Check if vault file exists and get its HMAC
@@ -1040,12 +1080,12 @@ class VaultTool:
                             first_line = vf.readline().strip()
                             vault_hmac = first_line if first_line else None
                     except (IOError, OSError) as e:
-                        logger.warning(f"Failed to read existing vault file {vault_file}: {e}")
+                        logger.warning("Failed to read existing vault file %s: %s", vault_file, e)
                         vault_hmac = None
 
                 # Decide if encryption is needed
                 if vault_exists and hmac_tag == vault_hmac and not force:
-                    logger.debug(f"Skipping unchanged file: {source_file}")
+                    logger.debug("Skipping unchanged file: %s", source_file)
                     skipped += 1
                     continue
 
@@ -1096,7 +1136,7 @@ class VaultTool:
                         raise IOError(f"Vault file verification failed: {verify_err}")
 
                     action = "Updated" if vault_exists else "Created"
-                    logger.info(f"{action} vault file: {vault_file} for source: {source_file} ({written_size} bytes)")
+                    logger.info("%s vault file: %s for source: %s (%s bytes)", action, vault_file, source_file, written_size)
                     logger.debug("Vault file verified: HMAC correct, size correct")
 
                     if vault_exists:
@@ -1109,12 +1149,12 @@ class VaultTool:
                     if Path(temp_encrypted).exists():
                         try:
                             os.remove(temp_encrypted)
-                            logger.debug(f"Removed temp file: {temp_encrypted}")
+                            logger.debug("Removed temp file: %s", temp_encrypted)
                         except OSError as cleanup_err:
-                            logger.warning(f"Failed to remove temp file {temp_encrypted}: {cleanup_err}")
+                            logger.warning("Failed to remove temp file %s: %s", temp_encrypted, cleanup_err)
 
             except (IOError, OSError, ValueError) as e:
-                logger.error(f"Failed to encrypt {source_file}: {e}", exc_info=logger.isEnabledFor(logging.DEBUG))
+                logger.error("Failed to encrypt %s: %s", source_file, e, exc_info=logger.isEnabledFor(logging.DEBUG))
                 errors.append((str(source_file), f"Encryption failed: {e}"))
                 failed += 1
                 continue
@@ -1136,7 +1176,7 @@ class VaultTool:
         }
 
 
-    def remove_task(self) -> Dict[str, Any]:
+    def remove_task(self) -> RemoveResult:
         """Delete all vault files matching the configured suffix.
 
         Permanently removes all vault files found in the configured include
@@ -1169,7 +1209,7 @@ class VaultTool:
 
         if self.use_suffix_fallback and self.suffix != ".vault":
             # When suffix fallback is enabled, remove BOTH custom suffix and .vault files
-            logger.info(f"Collecting vault files with custom suffix '{self.suffix}' and fallback '.vault' files")
+            logger.info("Collecting vault files with custom suffix '%s' and fallback '.vault' files", self.suffix)
             for dir in self.include_directories:
                 # Find files with custom suffix
                 for vault_file in Path(dir).rglob(f"*{self.suffix}"):
@@ -1182,21 +1222,21 @@ class VaultTool:
                         vault_files_to_remove.add(vault_file)
         else:
             # Traditional behavior: collect all vault files with configured suffix
-            logger.info(f"Collecting vault files with suffix '{self.suffix}'")
+            logger.info("Collecting vault files with suffix '%s'", self.suffix)
             for dir in self.include_directories:
                 for vault_file in Path(dir).rglob(f"*{self.suffix}"):
                     vault_files_to_remove.add(vault_file)
 
-        logger.info(f"Found {len(vault_files_to_remove)} vault files to remove")
+        logger.info("Found %s vault files to remove", len(vault_files_to_remove))
 
         for vault_file in vault_files_to_remove:
             total += 1
             try:
                 vault_file.unlink()
-                logger.info(f"Removed vault file: {vault_file}")
+                logger.info("Removed vault file: %s", vault_file)
                 removed += 1
             except (IOError, OSError, PermissionError) as e:
-                logger.error(f"Failed to remove {vault_file}: {e}")
+                logger.error("Failed to remove %s: %s", vault_file, e)
                 errors.append((str(vault_file), f"Remove failed: {e}"))
                 failed += 1
 

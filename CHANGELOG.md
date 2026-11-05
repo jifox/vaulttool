@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- End-to-end CLI tests using Typer's runner, covering `encrypt`, `refresh`, `remove`, `check-ignore`, `generate-key` (including backup, decline and `--rekey` flows), `version` and `gen-vaulttool`. `vaulttool/cli.py` coverage went from 32% to 81%; overall coverage is now 94%.
+
+### Changed
+
+- `--verbose` / `--quiet` now work both before and after the command name (`vaulttool --verbose encrypt` was documented but previously failed with a usage error).
+- CLI output goes through a small `Ui` helper, removing the repeated `if not quiet: typer.echo(...)` boilerplate and aligning the summary blocks.
+- Task results are documented with `TypedDict` definitions (`RefreshResult`, `EncryptResult`, `RemoveResult`, `CheckIgnoreResult`); the runtime type is still a plain dict.
+- Remaining logging calls use lazy `%`-style formatting instead of pre-formatted f-strings.
+
 ## [2.1.0] - 2026-11-05
 
 ### Security
