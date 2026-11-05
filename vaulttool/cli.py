@@ -15,6 +15,7 @@ Available commands:
 """
 
 import logging
+import os
 import sys
 import secrets
 from pathlib import Path
@@ -81,6 +82,29 @@ def _setup_cli_logging(verbose: bool = False, quiet: bool = False) -> logging.Lo
         level = logging.INFO
 
     return setup_logging(level=level, include_timestamp=False)
+
+
+def _write_private_file(path: Path, content: str, exclusive: bool = False) -> None:
+    """Write a file that is only readable by its owner (mode 0600).
+
+    The permissions are applied with ``os.open`` at creation time, so the file
+    is never world-readable, not even briefly (``write_text`` + ``chmod`` leaves
+    such a window open).
+
+    Args:
+        path: Destination path.
+        content: Text to write.
+        exclusive: If True, fail instead of overwriting an existing file.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_EXCL if exclusive else os.O_TRUNC)
+    fd = os.open(path, flags, 0o600)
+    try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        os.write(fd, content.encode("utf-8"))
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def _get_version() -> str:
@@ -219,9 +243,8 @@ Examples:
             # Ensure parent directory exists
             key_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Write new key
-            key_path.write_text(new_key + "\n")
-            key_path.chmod(0o600)
+            # Create the key with 0600 permissions from the start
+            _write_private_file(key_path, new_key + "\n", exclusive=True)
 
             if not quiet:
                 typer.echo(f"✅ Successfully created new key file: {key_path}")
@@ -319,9 +342,8 @@ Examples:
             # Read old key
             old_key = key_path.read_text()
 
-            # Write backup
-            backup_path.write_text(old_key)
-            backup_path.chmod(0o600)
+            # Write backup (0600, never overwrite an existing backup)
+            _write_private_file(backup_path, old_key, exclusive=True)
 
             if not quiet:
                 typer.echo(f"   ✅ Old key backed up to: {backup_path}")
@@ -334,8 +356,7 @@ Examples:
 
         # Write new key
         try:
-            key_path.write_text(new_key + "\n")
-            key_path.chmod(0o600)
+            _write_private_file(key_path, new_key + "\n")
 
             if not quiet:
                 typer.echo(f"   ✅ New key written to: {key_path}")

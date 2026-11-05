@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import base64
 import logging
+import os
 from typing import Union, Tuple
 from pathlib import Path
 from cryptography.hazmat.primitives import hashes
@@ -17,6 +18,27 @@ logger = logging.getLogger(__name__)
 
 #: Size of the chunks used when hashing files (64 KiB).
 DEFAULT_CHUNK_SIZE: int = 64 * 1024
+
+
+def _warn_if_key_permissions_are_loose(key_path: Path, key_file: str) -> None:
+    """Warn when the master key is readable or writable by other users.
+
+    Args:
+        key_path: Resolved path to the key file.
+        key_file: Path as supplied by the caller (used in the message).
+    """
+    if os.name != "posix":
+        return
+    try:
+        mode = key_path.stat().st_mode & 0o777
+    except OSError:
+        return
+    if mode & 0o077:
+        logger.warning(
+            "Key file %s has permissions %o; only the owner should be able to read it (chmod 600)",
+            key_file,
+            mode,
+        )
 
 #: Minimum master-key length accepted by :func:`derive_keys`.
 MIN_KEY_SIZE: int = 16
@@ -72,17 +94,26 @@ def derive_keys(key_file: str, salt: bytes = b"vaulttool-v1") -> Tuple[bytes, by
         logger.error(f"Key file too large: {file_size} bytes (maximum 1MB)")
         raise ValueError(f"Key file too large: {file_size} bytes (maximum 1MB)")
 
-    # Read and validate key material
+    # Read key material verbatim (only trailing line endings are removed, so
+    # significant whitespace inside the key is never silently altered).
     with open(key_path, "rb") as f:
-        master_key = f.read().strip()
+        master_key = f.read().rstrip(b"\r\n")
 
-    # Validate key is not empty after stripping whitespace
-    if len(master_key) == 0:
-        logger.error(f"Key file contains only whitespace: {key_file}")
+    _warn_if_key_permissions_are_loose(key_path, key_file)
+
+    # Validate the meaningful content, ignoring padding whitespace
+    meaningful_key = master_key.strip()
+    if len(meaningful_key) == 0:
+        logger.error("Key file contains only whitespace: %s", key_file)
         raise ValueError(f"Key file contains only whitespace: {key_file}")
-    if len(master_key) < 16:
-        logger.error(f"Key material too short after stripping: {len(master_key)} bytes")
-        raise ValueError(f"Key material too short after stripping: {len(master_key)} bytes (minimum 16 bytes)")
+    if len(meaningful_key) < MIN_KEY_SIZE:
+        logger.error("Key material too short after stripping: %s bytes", len(meaningful_key))
+        raise ValueError(
+            f"Key material too short after stripping: {len(meaningful_key)} bytes "
+            f"(minimum {MIN_KEY_SIZE} bytes)"
+        )
+
+    logger.debug("Key material: %s bytes", len(master_key))
 
     logger.debug(f"Key material: {len(master_key)} bytes")
 
@@ -250,7 +281,7 @@ def get_git_branch() -> str:
                 logger.debug(f"Detected git branch: {sanitized}")
                 return sanitized
 
-    except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
+    except Exception as e:
         logger.debug(f"Could not determine git branch via command: {e}")
 
     # Fallback: try reading .git/HEAD directly
