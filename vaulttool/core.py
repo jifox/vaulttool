@@ -20,15 +20,22 @@ Environment Variables:
 
 import base64
 import binascii
+import hmac
 import logging
 import os
+import re
+import tempfile
 from pathlib import Path
-from typing import Dict, Any
-from .config import load_config
-from .utils import compute_hmac, derive_keys, encode_base64
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from typing import Any, Dict, Optional, Union
+
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import padding as sym_padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from .config import load_config
+from .utils import compute_hmac, compute_hmac_bytes, derive_keys, encode_base64
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +44,33 @@ VAULTTOOL_PRECOMMIT: bool = bool(os.environ.get("VAULTTOOL_PRECOMMIT"))
 
 # Maximum file size to prevent memory exhaustion (100MB)
 MAX_FILE_SIZE: int = 100 * 1024 * 1024
+
+#: Default vault suffix used when the configuration does not define one.
+DEFAULT_SUFFIX: str = ".vault"
+
+#: Marker that identifies a v2 (AES-GCM) encrypted payload.
+GCM_MAGIC: bytes = b"VT2\x01"
+
+#: AES-GCM nonce size in bytes (96-bit nonce, as recommended for GCM).
+GCM_NONCE_SIZE: int = 12
+
+#: AES-GCM authentication tag size in bytes.
+GCM_TAG_SIZE: int = 16
+
+#: IV size used by the legacy AES-CBC payload format.
+LEGACY_IV_SIZE: int = 16
+
+#: AES block size in bytes.
+AES_BLOCK_SIZE: int = 16
+
+#: Smallest payload that can carry a complete v2 (magic + nonce + tag) record.
+MIN_ENCRYPTED_SIZE: int = 32
+
+#: Length of a hexadecimal SHA-256 HMAC.
+HMAC_HEX_LENGTH: int = 64
+
+#: Strict format of a vault file's authentication digest line.
+HMAC_HEX_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
 class VaultTool:
@@ -160,13 +194,64 @@ class VaultTool:
         Returns:
             True if valid HMAC format, False otherwise.
         """
-        if not hmac_str or len(hmac_str) != 64:
+        if not hmac_str or len(hmac_str) != HMAC_HEX_LENGTH:
             return False
+        return HMAC_HEX_PATTERN.fullmatch(hmac_str.lower()) is not None
+
+    @staticmethod
+    def _path_aad(path: Union[str, Path]) -> bytes:
+        """Build additional authenticated data that binds a payload to a path.
+
+        The path is normalised relative to the current working directory so that
+        vault files stay portable between machines (no absolute paths are baked
+        into the ciphertext) while still being bound to their logical location.
+
+        Args:
+            path: Logical path of the plaintext file.
+
+        Returns:
+            The UTF-8 encoded POSIX-style relative path.
+        """
+        candidate = Path(path)
         try:
-            int(hmac_str, 16)  # Validate it's hexadecimal
-            return True
-        except ValueError:
-            return False
+            relative = candidate.resolve().relative_to(Path.cwd().resolve())
+        except (OSError, ValueError):
+            relative = candidate
+        return relative.as_posix().encode("utf-8")
+
+    @staticmethod
+    def _write_bytes_atomically(path: Path, data: bytes) -> None:
+        """Write ``data`` to ``path`` using a temporary file and an atomic rename.
+
+        Prevents a crash or a full disk from leaving a half-written file behind,
+        and keeps the permissions of an existing file (or 0600 for new ones).
+
+        Args:
+            path: Destination path.
+            data: Bytes to write.
+        """
+        path = Path(path)
+        mode = None
+        try:
+            mode = path.stat().st_mode & 0o777
+        except OSError:
+            mode = None
+
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if mode is not None:
+                os.chmod(tmp_name, mode)
+            os.replace(tmp_name, path)
+        except BaseException:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
 
     @staticmethod
     def source_filename(vault_path: str, suffix: str) -> str:
@@ -285,26 +370,28 @@ class VaultTool:
 
         return None
 
-    def encrypt_file(self, source_path: str, encrypted_path: str):
-        """Encrypt a single file using AES-256-CBC with derived encryption key.
+    def encrypt_file(self, source_path: str, encrypted_path: str, aad: Optional[bytes] = None):
+        """Encrypt a single file using AES-256-GCM with the derived encryption key.
 
-        Uses the cryptographically derived encryption key with AES-256-CBC mode.
-        Generates a random IV (Initialization Vector) for each encryption and
-        prepends it to the ciphertext.
+        Every encryption uses a fresh random 96-bit nonce. The payload is
+        authenticated (AEAD), so tampering is detected *before* any plaintext
+        is produced. An optional ``aad`` (additional authenticated data) binds
+        the ciphertext to its logical location, which prevents a vault file
+        from being silently swapped with another one.
 
         Args:
             source_path: Path to the plaintext file to encrypt.
             encrypted_path: Path where the encrypted file will be written.
+            aad: Optional additional authenticated data (e.g. the source path).
 
         Raises:
             IOError: If source file cannot be read or encrypted file cannot be written.
-            ValueError: If file paths are invalid or outside working directory.
+            ValueError: If file paths are invalid, outside working directory, or too large.
 
         Note:
-            Output format: IV (16 bytes) + Encrypted Data (variable length)
-            The IV is randomly generated for each encryption operation.
+            Output format: magic (4) + nonce (12) + ciphertext + tag (16).
         """
-        logger.debug(f"Encrypting file: {source_path} -> {encrypted_path}")
+        logger.debug("Encrypting file: %s -> %s", source_path, encrypted_path)
 
         # Validate source path for security (must exist and be within workspace)
         source = self._validate_file_path(source_path, require_exists=True)
@@ -317,65 +404,142 @@ class VaultTool:
 
         # Check file size to prevent memory exhaustion
         file_size = source.stat().st_size
-        logger.debug(f"Source file size: {file_size} bytes")
+        logger.debug("Source file size: %s bytes", file_size)
         if file_size > MAX_FILE_SIZE:
-            logger.error(f"File too large: {file_size} bytes (maximum {MAX_FILE_SIZE} bytes)")
-            raise ValueError(f"File too large: {file_size} bytes (maximum {MAX_FILE_SIZE} bytes / {MAX_FILE_SIZE // (1024*1024)}MB)")
+            logger.error("File too large: %s bytes (maximum %s bytes)", file_size, MAX_FILE_SIZE)
+            raise ValueError(
+                f"File too large: {file_size} bytes "
+                f"(maximum {MAX_FILE_SIZE} bytes / {MAX_FILE_SIZE // (1024 * 1024)}MB)"
+            )
 
-        # Read plaintext
         with open(source, "rb") as f:
             plaintext = f.read()
 
-        # Generate random IV (16 bytes for AES)
-        iv = os.urandom(16)
+        payload = self._encrypt_payload(plaintext, aad)
 
-        # Apply PKCS7 padding to plaintext
-        padder = sym_padding.PKCS7(128).padder()  # 128 bits = 16 bytes block size
-        padded_plaintext = padder.update(plaintext) + padder.finalize()
+        # Validate encrypted output
+        encrypted_size = len(payload)
+        if encrypted_size < MIN_ENCRYPTED_SIZE:  # < 32: magic + nonce + tag truncated
+            logger.error("Encrypted output suspiciously small: %s bytes", encrypted_size)
+            raise ValueError(
+                f"Encrypted output suspiciously small: {encrypted_size} bytes "
+                f"(minimum {MIN_ENCRYPTED_SIZE})"
+            )
 
-        # Create cipher and encrypt
+        logger.debug("Encrypted %s bytes -> %s bytes", file_size, encrypted_size)
+
+        with open(encrypted_path, "wb") as f:
+            f.write(payload)
+
+        logger.debug("Successfully wrote encrypted file: %s", encrypted_path)
+
+    def _encrypt_payload(self, plaintext: bytes, aad: Optional[bytes] = None) -> bytes:
+        """Encrypt in-memory plaintext into a self-describing v2 payload.
+
+        Args:
+            plaintext: Bytes to encrypt.
+            aad: Optional additional authenticated data.
+
+        Returns:
+            ``magic + nonce + ciphertext + tag``.
+        """
+        nonce = os.urandom(GCM_NONCE_SIZE)
+        ciphertext_and_tag = AESGCM(self.encryption_key).encrypt(nonce, plaintext, aad)
+        return GCM_MAGIC + nonce + ciphertext_and_tag
+
+    def _decrypt_payload(self, payload: bytes, aad: Optional[bytes] = None) -> bytes:
+        """Decrypt a v2 payload or a legacy AES-CBC payload.
+
+        The v2 format is authenticated before any plaintext is returned, so a
+        tampered vault file never produces usable output. Legacy (v1) payloads
+        are decrypted with AES-CBC; callers are responsible for verifying the
+        HMAC line, which :meth:`refresh_task` does before writing to disk.
+
+        Args:
+            payload: Raw payload bytes read from a vault/temporary file.
+            aad: Additional authenticated data used when the file was encrypted.
+
+        Returns:
+            The decrypted plaintext.
+
+        Raises:
+            ValueError: If the payload is malformed, truncated, or fails authentication.
+        """
+        if payload.startswith(GCM_MAGIC):
+            return self._decrypt_v2_payload(payload, aad)
+        return self._decrypt_legacy_payload(payload)
+
+    def _decrypt_v2_payload(self, payload: bytes, aad: Optional[bytes] = None) -> bytes:
+        """Decrypt an AES-256-GCM payload, raising ``ValueError`` on failure."""
+        if len(payload) < len(GCM_MAGIC) + GCM_NONCE_SIZE + GCM_TAG_SIZE:
+            raise ValueError(
+                f"Encrypted file is too short for the v2 format: {len(payload)} bytes"
+            )
+
+        nonce_start = len(GCM_MAGIC)
+        nonce = payload[nonce_start:nonce_start + GCM_NONCE_SIZE]
+        ciphertext_and_tag = payload[nonce_start + GCM_NONCE_SIZE:]
+
+        try:
+            return AESGCM(self.encryption_key).decrypt(nonce, ciphertext_and_tag, aad)
+        except InvalidTag as e:
+            logger.error("Authentication failed for encrypted payload (invalid GCM tag)")
+            raise ValueError(
+                "Authentication failed: the vault file was modified or was created "
+                "for a different file path"
+            ) from e
+
+    def _decrypt_legacy_payload(self, payload: bytes) -> bytes:
+        """Decrypt a legacy AES-256-CBC payload (IV + ciphertext)."""
+        if len(payload) < LEGACY_IV_SIZE:
+            logger.error("Encrypted file too short: %s bytes (missing IV)", len(payload))
+            raise ValueError(f"Encrypted file is too short (missing IV): {len(payload)} bytes")
+
+        if len(payload) == LEGACY_IV_SIZE:
+            logger.error("Encrypted file contains no ciphertext (only IV)")
+            raise ValueError("Encrypted file contains no ciphertext (only IV)")
+
+        ciphertext_len = len(payload) - LEGACY_IV_SIZE
+        if ciphertext_len % AES_BLOCK_SIZE != 0:
+            logger.error("Invalid ciphertext length: %s bytes (not multiple of 16)", ciphertext_len)
+            raise ValueError(
+                f"Invalid ciphertext length: {ciphertext_len} bytes "
+                f"(not multiple of {AES_BLOCK_SIZE}-byte block size)"
+            )
+
+        iv = payload[:LEGACY_IV_SIZE]
+        ciphertext = payload[LEGACY_IV_SIZE:]
+
         cipher = Cipher(
             algorithms.AES(self.encryption_key),
             modes.CBC(iv),
-            backend=default_backend()
+            backend=default_backend(),
         )
-        encryptor = cipher.encryptor()
-        ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
+        decryptor = cipher.decryptor()
+        padded_plaintext = decryptor.update(ciphertext) + decryptor.finalize()
 
-        # Validate encrypted output
-        encrypted_size = len(iv + ciphertext)
-        if encrypted_size < 32:  # At least IV (16) + one AES block (16)
-            logger.error(f"Encrypted output suspiciously small: {encrypted_size} bytes")
-            raise ValueError(f"Encrypted output suspiciously small: {encrypted_size} bytes (minimum 32)")
+        unpadder = sym_padding.PKCS7(128).unpadder()
+        return unpadder.update(padded_plaintext) + unpadder.finalize()
 
-        logger.debug(f"Encrypted {file_size} bytes -> {encrypted_size} bytes (IV: 16 + ciphertext: {len(ciphertext)})")
+    def decrypt_file(self, encrypted_path: str, output_path: str, aad: Optional[bytes] = None):
+        """Decrypt a single file, authenticating it before anything is written.
 
-        # Write IV + ciphertext to file
-        with open(encrypted_path, "wb") as f:
-            f.write(iv + ciphertext)
-
-        logger.debug(f"Successfully wrote encrypted file: {encrypted_path}")
-
-    def decrypt_file(self, encrypted_path: str, output_path: str):
-        """Decrypt a single file using AES-256-CBC with derived encryption key.
-
-        Uses the cryptographically derived encryption key with AES-256-CBC mode.
-        Reads the IV from the beginning of the encrypted file and uses it for
-        decryption.
+        The payload is decrypted in memory first. For v2 (AES-GCM) payloads the
+        authentication tag is verified by :mod:`cryptography` before the
+        plaintext is returned, so a tampered file can never produce output on
+        disk. Legacy AES-CBC payloads are decrypted in memory as well; callers
+        must verify the vault HMAC line before trusting the result.
 
         Args:
             encrypted_path: Path to the encrypted file to decrypt.
             output_path: Path where the decrypted file will be written.
+            aad: Additional authenticated data used when the file was encrypted.
 
         Raises:
-            IOError: If encrypted file cannot be read or decrypted file cannot be written.
-            ValueError: If the encrypted file is malformed or decryption fails.
-
-        Note:
-            Input format: IV (16 bytes) + Encrypted Data (variable length)
-            The IV is read from the first 16 bytes of the encrypted file.
+            IOError: If the encrypted file cannot be read or the output cannot be written.
+            ValueError: If the encrypted file is malformed or authentication fails.
         """
-        logger.debug(f"Decrypting file: {encrypted_path} -> {output_path}")
+        logger.debug("Decrypting file: %s -> %s", encrypted_path, output_path)
 
         # Validate encrypted input path for security
         encrypted = self._validate_file_path(encrypted_path, require_exists=True)
@@ -386,54 +550,29 @@ class VaultTool:
         if not output.parent.exists():
             raise ValueError(f"Parent directory does not exist: {output.parent}")
 
-        # Read encrypted data
+        # Bound memory usage symmetrically with encrypt_file()
+        encrypted_size = encrypted.stat().st_size
+        if encrypted_size > MAX_FILE_SIZE:
+            logger.error("Encrypted file too large: %s bytes (maximum %s bytes)", encrypted_size, MAX_FILE_SIZE)
+            raise ValueError(
+                f"Encrypted file too large: {encrypted_size} bytes (maximum {MAX_FILE_SIZE} bytes)"
+            )
+
         with open(encrypted, "rb") as f:
-            encrypted_data = f.read()
+            payload = f.read()
 
-        # Extract IV and ciphertext with validation
-        if len(encrypted_data) < 16:
-            logger.error(f"Encrypted file too short: {len(encrypted_data)} bytes (missing IV)")
-            raise ValueError(f"Encrypted file is too short (missing IV): {len(encrypted_data)} bytes")
+        # Authenticate + decrypt in memory; nothing is written on failure
+        plaintext = self._decrypt_payload(payload, aad)
 
-        if len(encrypted_data) == 16:
-            logger.error("Encrypted file contains no ciphertext (only IV)")
-            raise ValueError("Encrypted file contains no ciphertext (only IV)")
+        logger.debug("Decrypted %s bytes -> %s bytes plaintext", len(payload), len(plaintext))
 
-        # For CBC mode, ciphertext must be multiple of block size (16 bytes)
-        ciphertext_len = len(encrypted_data) - 16
-        if ciphertext_len % 16 != 0:
-            logger.error(f"Invalid ciphertext length: {ciphertext_len} bytes (not multiple of 16)")
-            raise ValueError(f"Invalid ciphertext length: {ciphertext_len} bytes (not multiple of 16-byte block size)")
-
-        logger.debug(f"Encrypted data: {len(encrypted_data)} bytes (IV: 16, ciphertext: {ciphertext_len})")
-
-        iv = encrypted_data[:16]
-        ciphertext = encrypted_data[16:]
-
-        # Create cipher and decrypt
-        cipher = Cipher(
-            algorithms.AES(self.encryption_key),
-            modes.CBC(iv),
-            backend=default_backend()
-        )
-        decryptor = cipher.decryptor()
-        padded_plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-
-        # Remove PKCS7 padding
-        unpadder = sym_padding.PKCS7(128).unpadder()
-        plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
-
-        logger.debug(f"Decrypted {len(ciphertext)} bytes -> {len(plaintext)} bytes plaintext")
-
-        # Validate decrypted output isn't empty
-        if len(plaintext) == 0:
+        if not plaintext:
             logger.warning("Decryption produced empty output (0 bytes)")
 
-        # Write plaintext to output file
         with open(output_path, "wb") as f:
             f.write(plaintext)
 
-        logger.debug(f"Successfully wrote decrypted file: {output_path}")
+        logger.debug("Successfully wrote decrypted file: %s", output_path)
 
     def add_to_gitignore(self, file_path: Path):
         """Add a file to .gitignore if not already present.
@@ -635,7 +774,7 @@ class VaultTool:
                     lines = vf.readlines()
                     if len(lines) < 2:
                         raise ValueError("Vault file has insufficient lines (expected at least 2)")
-                    stored_hmac = lines[0].strip()
+                    stored_hmac = lines[0].strip().lower()
                     encrypted_b64 = lines[1].strip()
             except (IOError, OSError) as e:
                 logger.error(f"Failed to read vault file {vault_file}: {e}")
@@ -670,59 +809,32 @@ class VaultTool:
                 failed += 1
                 continue
 
-            # Write to temp file and decrypt
-            temp_path = str(vault_file) + ".tmp"
+            # Authenticate and decrypt in memory before touching the disk:
+            # unauthenticated plaintext must never be written.
             try:
-                logger.debug(f"Decrypting {vault_file} -> {source_file}")
-                with open(temp_path, "wb") as tf:
-                    tf.write(encrypted_data)
+                logger.debug("Decrypting %s -> %s", vault_file, source_file)
+                plaintext = self._decrypt_payload(encrypted_data, self._path_aad(source_file))
 
-                # Decrypt to source file
-                self.decrypt_file(temp_path, str(source_file))
-
-                # CRITICAL: Verify HMAC after decryption
-                computed_hmac = compute_hmac(source_file, self.hmac_key)
-                if computed_hmac != stored_hmac:
-                    logger.error(f"HMAC verification failed for {vault_file}")
-                    logger.debug(f"  Stored HMAC:   {stored_hmac}")
-                    logger.debug(f"  Computed HMAC: {computed_hmac}")
-                    logger.warning("File may have been tampered with - removing decrypted file")
-
-                    # Delete the potentially corrupted decrypted file
-                    if source_file.exists():
-                        try:
-                            source_file.unlink()
-                            logger.debug(f"Removed potentially corrupted file: {source_file}")
-                        except OSError as cleanup_err:
-                            logger.warning(f"Failed to remove corrupted file {source_file}: {cleanup_err}")
-
+                computed_hmac = compute_hmac_bytes(plaintext, self.hmac_key)
+                if not hmac.compare_digest(computed_hmac, stored_hmac):
+                    logger.error("HMAC verification failed for %s", vault_file)
+                    logger.debug("  Stored HMAC:   %s", stored_hmac)
+                    logger.debug("  Computed HMAC: %s", computed_hmac)
+                    logger.warning("File may have been tampered with - nothing was written")
                     errors.append((str(vault_file), "HMAC verification failed"))
                     failed += 1
                     continue
 
-                logger.info(f"Successfully restored {source_file} from {vault_file} (HMAC verified ✓)")
+                self._write_bytes_atomically(source_file, plaintext)
+                logger.info("Successfully restored %s from %s (authenticated ✓)", source_file, vault_file)
                 succeeded += 1
 
             except (IOError, OSError, ValueError) as e:
-                logger.error(f"Failed to decrypt {vault_file}: {e}", exc_info=logger.isEnabledFor(logging.DEBUG))
+                logger.error(
+                    "Failed to decrypt %s: %s", vault_file, e, exc_info=logger.isEnabledFor(logging.DEBUG)
+                )
                 errors.append((str(vault_file), f"Decryption failed: {e}"))
                 failed += 1
-
-                # Clean up partial output
-                if source_file.exists():
-                    try:
-                        source_file.unlink()
-                        logger.debug(f"Cleaned up partial file: {source_file}")
-                    except OSError as cleanup_err:
-                        logger.warning(f"Failed to cleanup {source_file}: {cleanup_err}")
-            finally:
-                # Clean up temp file
-                if Path(temp_path).exists():
-                    try:
-                        os.remove(temp_path)
-                        logger.debug(f"Removed temp file: {temp_path}")
-                    except OSError as cleanup_err:
-                        logger.warning(f"Failed to remove temp file {temp_path}: {cleanup_err}")
 
         # Log summary
         logger.info(f"Refresh completed: {succeeded}/{total} succeeded, {failed} failed, {skipped} skipped")
@@ -807,26 +919,23 @@ class VaultTool:
                     continue
 
                 # Encrypt file to temp, then encode and write .vault file
-                logger.debug(f"Encrypting {source_file} -> {vault_file}")
+                logger.debug("Encrypting %s -> %s", source_file, vault_file)
                 temp_encrypted = str(vault_file) + ".tmp"
 
                 try:
-                    self.encrypt_file(str(source_file), temp_encrypted)
+                    # Bind the ciphertext to its logical path (AAD) so a vault
+                    # file cannot be silently swapped with another one.
+                    self.encrypt_file(str(source_file), temp_encrypted, aad=self._path_aad(source_file))
 
                     with open(temp_encrypted, "rb") as ef:
                         encoded = encode_base64(ef.read()).decode()
 
-                    # Calculate expected size for validation
-                    expected_content = hmac_tag + "\n" + encoded + "\n"
-                    expected_size = len(expected_content.encode('utf-8'))
+                    # Bytes, not text: keeps the byte count identical on every platform
+                    expected_content = (hmac_tag + "\n" + encoded + "\n").encode("utf-8")
+                    expected_size = len(expected_content)
 
-                    # Write vault file with HMAC and encrypted content
-                    logger.debug(f"Writing vault file: {vault_file} ({expected_size} bytes)")
-                    with open(vault_file, "w", encoding="utf-8") as vf:
-                        vf.write(expected_content)
-                        vf.flush()
-                        # Force write to disk to ensure data is persisted
-                        os.fsync(vf.fileno())
+                    logger.debug("Writing vault file: %s (%s bytes)", vault_file, expected_size)
+                    self._write_bytes_atomically(vault_file, expected_content)
 
                     # Verify the file was written correctly
                     if not vault_file.exists():
@@ -835,19 +944,24 @@ class VaultTool:
                     # Verify file size matches expected
                     written_size = vault_file.stat().st_size
                     if written_size != expected_size:
-                        logger.error(f"Incomplete write to {vault_file}: {written_size} bytes (expected {expected_size})")
-                        raise IOError(f"Incomplete write: {written_size} bytes written, expected {expected_size} bytes")
+                        logger.error(
+                            "Incomplete write to %s: %s bytes (expected %s)",
+                            vault_file, written_size, expected_size,
+                        )
+                        raise IOError(
+                            f"Incomplete write: {written_size} bytes written, expected {expected_size} bytes"
+                        )
 
                     # Verify file is readable and contains valid data
                     try:
-                        with open(vault_file, "r", encoding="utf-8") as vf_verify:
-                            verify_lines = vf_verify.readlines()
-                            if len(verify_lines) < 2:
-                                raise IOError("Vault file verification failed: insufficient lines")
-                            if verify_lines[0].strip() != hmac_tag:
-                                raise IOError("Vault file verification failed: HMAC mismatch")
+                        with open(vault_file, "rb") as vf_verify:
+                            verify_lines = vf_verify.read().split(b"\n")
+                        if len(verify_lines) < 2 or not verify_lines[1].strip():
+                            raise IOError("Vault file verification failed: insufficient lines")
+                        if verify_lines[0].decode("ascii").strip() != hmac_tag:
+                            raise IOError("Vault file verification failed: HMAC mismatch")
                     except (IOError, OSError, UnicodeDecodeError) as verify_err:
-                        logger.error(f"Vault file verification failed for {vault_file}: {verify_err}")
+                        logger.error("Vault file verification failed for %s: %s", vault_file, verify_err)
                         raise IOError(f"Vault file verification failed: {verify_err}")
 
                     action = "Updated" if vault_exists else "Created"
