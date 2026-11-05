@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- End-to-end CLI tests using Typer's runner, covering `encrypt`, `refresh`, `remove`, `check-ignore`, `generate-key` (including backup, decline and `--rekey` flows), `version` and `gen-vaulttool`. `vaulttool/cli.py` coverage went from 32% to 81%; overall coverage is now 94%.
+- End-to-end CLI tests using Typer's runner, covering `encrypt`, `refresh`, `remove`, `check-ignore`, `generate-key` (including backup, decline and `--rekey` flows), `version` and `gen-vaulttool`.
+- Failure-path tests for every command, including configuration errors, aborted prompts, backup/write failures and task failures. `vaulttool/cli.py` is now fully covered (32% → 100%) and overall coverage is 96%.
 
 ### Changed
 
