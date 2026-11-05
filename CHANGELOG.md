@@ -5,6 +5,16 @@ All notable changes to VaultTool will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Codecov uploads failed with `Token required - not valid tokenless upload`, leaving the README coverage badge at **unknown**. The CI workflow now uses `codecov/codecov-action@v5` with `files`, passes `CODECOV_TOKEN` when available, enables tokenless OIDC uploads (`permissions: id-token: write`, `use_oidc: true`), and ships a `codecov.yml` configuration.
+
+### Changed
+
+- The `pytest` pre-commit hook now reports coverage (`--cov=vaulttool --cov-report=term-missing:skip-covered`).
+
 ## [2.0.4] - 2026-11-05
 
 ### Fixed
