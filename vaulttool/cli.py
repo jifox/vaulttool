@@ -666,7 +666,20 @@ Example:
 
     try:
         vt = VaultTool()
-        vt.check_ignore_task()
+        result = vt.check_ignore_task()
+
+        if not quiet:
+            typer.echo("\n" + "=" * 60)
+            typer.echo("Check Ignore Summary:")
+            typer.echo(f"  Total:       {result['total']}")
+            typer.echo(f"  Ignored:     {result['ignored']}")
+            typer.echo(f"  Not ignored: {len(result['not_ignored'])}")
+            typer.echo("=" * 60)
+            for not_ignored in result["not_ignored"]:
+                typer.echo(f"  \u26a0  {not_ignored}", err=True)
+
+        if result["not_ignored"]:
+            sys.exit(1)
     except Exception as e:
         typer.echo(f"ERROR: {e}", err=True)
         sys.exit(1)

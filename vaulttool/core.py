@@ -24,9 +24,10 @@ import hmac
 import logging
 import os
 import re
+import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.backends import default_backend
@@ -600,30 +601,75 @@ class VaultTool:
                 gi.write(f"{rel_path}\n")
             logger.info(f"Added {rel_path} to .gitignore")
 
+    def _is_excluded(self, source_file: Path) -> bool:
+        """Return True when a file matches an exclude pattern or directory.
+
+        Directory exclusions are matched against whole path components, so
+        excluding ``.git`` no longer also excludes ``.gitignore`` and
+        excluding ``tests`` no longer excludes ``mytests/``.
+
+        Args:
+            source_file: Candidate source file.
+
+        Returns:
+            True if the file must be skipped.
+        """
+        if any(source_file.match(ex_pattern) for ex_pattern in self.exclude_patterns):
+            return True
+
+        for excluded in self.exclude_directories:
+            excluded_parts = Path(str(excluded).strip("/")).parts
+            if not excluded_parts:
+                continue
+            path_parts = source_file.parts
+            size = len(excluded_parts)
+            if any(path_parts[i:i + size] == excluded_parts for i in range(len(path_parts))):
+                return True
+        return False
+
+    def _iter_source_files(self, record_in_gitignore: bool = True):
+        """Yield matching source files once each.
+
+        Args:
+            record_in_gitignore: When True, discovered files are added to
+                ``.gitignore`` (the historical behaviour). When False the
+                iterator is side-effect free, which is required by
+                :meth:`check_ignore_task` so it can inspect the *current* state.
+
+        Yields:
+            Path: The path to each matching source file.
+        """
+        seen: set[Path] = set()
+        for directory in self.include_directories:
+            for pattern in self.include_patterns:
+                for source_file in Path(directory).rglob(pattern):
+                    if source_file in seen:
+                        continue
+                    if self._is_excluded(source_file):
+                        continue
+                    seen.add(source_file)
+                    if record_in_gitignore:
+                        self.add_to_gitignore(source_file)
+                    yield source_file
+
     def iter_source_files(self):
         """Generator for all source files matching the configured patterns.
 
         Recursively searches the include directories for files matching the
         include patterns, while excluding files matching exclude patterns
-        or located in exclude directories. Automatically adds found files
-        to .gitignore.
+        or located in exclude directories. Each file is yielded only once,
+        even when several patterns match it.
 
         Yields:
             Path: The path to each matching source file.
 
         Note:
             Files are automatically added to .gitignore as they are discovered
-            to prevent accidental commits of sensitive data.
+            to prevent accidental commits of sensitive data. Use
+            ``_iter_source_files(record_in_gitignore=False)`` for a
+            side-effect free iteration.
         """
-        for dir in self.include_directories:
-            for pattern in self.include_patterns:
-                for source_file in Path(dir).rglob(pattern):
-                    if any(source_file.match(ex_pat) for ex_pat in self.exclude_patterns):
-                        continue
-                    if any(ex_dir in str(source_file) for ex_dir in self.exclude_directories):
-                        continue
-                    self.add_to_gitignore(source_file)
-                    yield source_file
+        yield from self._iter_source_files(record_in_gitignore=True)
 
     def iter_vault_files(self):
         """Generator for all vault files matching the configured suffix.
@@ -693,20 +739,74 @@ class VaultTool:
             if not source_file.exists():
                 yield source_file
 
-    def check_ignore_task(self):
-        """Validate that all source files are properly ignored by Git.
+    def check_ignore_task(self) -> Dict[str, Any]:
+        """Validate that every source file is ignored by Git.
 
-        Iterates through all source files to ensure they are added to .gitignore.
-        This is primarily used as a validation step to ensure no sensitive files
-        are accidentally committed to version control.
+        Uses ``git check-ignore`` to decide whether each plaintext file would be
+        committed. This is a read-only check: unlike
+        :meth:`iter_source_files` it does not modify .gitignore.
 
-        Note:
-            This method currently only triggers the .gitignore addition side effect
-            of iter_source_files(). Future versions may add actual validation logic.
+        Returns:
+            Dict with keys: 'total', 'ignored', 'not_ignored', 'errors' where
+            'not_ignored' is a list of paths Git would track.
         """
-        # Just loop with iter_source_files
-        for source_file in self.iter_source_files():
-            pass
+        total = 0
+        ignored = 0
+        not_ignored: List[str] = []
+        errors: List[Tuple[str, str]] = []
+
+        for source_file in self._iter_source_files(record_in_gitignore=False):
+            total += 1
+            try:
+                if self._is_git_ignored(source_file):
+                    ignored += 1
+                else:
+                    not_ignored.append(str(source_file))
+            except (OSError, subprocess.SubprocessError) as e:
+                errors.append((str(source_file), str(e)))
+
+        logger.info(
+            "Ignore check completed: %s/%s source files ignored", ignored, total
+        )
+        for path in not_ignored[:5]:
+            logger.warning("Not ignored by Git: %s", path)
+        if len(not_ignored) > 5:
+            logger.warning("  ... and %s more", len(not_ignored) - 5)
+        for path, error in errors:
+            logger.debug("git check-ignore failed for %s: %s", path, error)
+
+        return {
+            "total": total,
+            "ignored": ignored,
+            "not_ignored": not_ignored,
+            "errors": errors,
+        }
+
+    @staticmethod
+    def _is_git_ignored(path: Path) -> bool:
+        """Return True when ``git check-ignore`` reports the path as ignored.
+
+        ``git check-ignore`` exits with 0 when the path is ignored and 1 when it
+        is not. Other exit codes mean the check could not run (for example the
+        directory is not a Git repository); those are treated as "ignored" so
+        that VaultTool never fails in a non-Git working tree.
+
+        Args:
+            path: Path to test.
+
+        Returns:
+            True if Git would ignore the file (or Git cannot be consulted).
+        """
+        result = subprocess.run(
+            ["git", "check-ignore", "--quiet", str(path)],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode in (0, 1):
+            return result.returncode == 0
+        logger.debug("git check-ignore returned %s for %s; assuming ignored", result.returncode, path)
+        return True
 
     def refresh_task(self, force: bool = True) -> Dict[str, Any]:
         """Decrypt and restore source files from their vault files.
