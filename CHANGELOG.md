@@ -5,6 +5,16 @@ All notable changes to VaultTool will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-11-05
+
+### Changed
+
+- Refreshed all dependencies with `poetry update`:
+  - Runtime: `typer` 0.19.2 → 0.27.3, `cryptography` 46.0.3 → 50.0.2, `rich` 14.2.0 → 15.0.0
+  - Development: `ruff` 0.14.0 → 0.17.3, `pre-commit` 4.3.0 → 4.6.2, `coverage` 7.11.0 → 7.16.2, `virtualenv` 20.35.3 → 21.15.5, `packaging` 25.0 → 26.3
+- `click` is no longer resolved as a separate lock file entry; `typer` 0.27 bundles it and VaultTool does not import `click` directly.
+- Verified the existing test suite (101 tests) passes with the updated dependency set; no source changes were required.
+
 ## [2.0.2] - 2026-02-25
 
 ### Fixed
