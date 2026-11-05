@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `click` is no longer resolved as a separate lock file entry; `typer` 0.27 bundles it and VaultTool does not import `click` directly.
 - Verified the existing test suite (101 tests) passes with the updated dependency set; no source changes were required.
 
+### Fixed
+
+- GitHub Actions `CI` and `Release to PyPI` workflows pinned Poetry 1.8.3 while `poetry.lock` uses the Poetry 2.x (lock-version 2.1) format, so every job failed at `poetry install` with `pyproject.toml changed significantly since poetry.lock was last generated`. Both workflows now install Poetry 2.3.1.
+
 ## [2.0.2] - 2026-02-25
 
 ### Fixed
